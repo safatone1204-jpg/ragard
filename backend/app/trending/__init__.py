@@ -1,0 +1,2 @@
+"""Trending tickers service."""
+

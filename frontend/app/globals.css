@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #050810;
+  --foreground: #F9FAFB;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Prevent input background color changes on focus/autofill */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #0B101A inset !important;
+  -webkit-text-fill-color: #F9FAFB !important;
+  background-color: #0B101A !important;
+  background: #0B101A !important;
+}
+
+input:focus {
+  background-color: #0B101A !important;
+  background: #0B101A !important;
+}
+
+/* Radar Loader Animations */
+@keyframes radarSweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes blipPulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes cursorMoveAndClick {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  30% {
+    transform: translate(122px, -5px) scale(1);
+  }
+  33% {
+    transform: translate(122px, -5px) scale(0.85);
+  }
+  36% {
+    transform: translate(122px, -5px) scale(1);
+  }
+  40% {
+    transform: translate(122px, -5px) scale(1);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* Chrome Extension Badge Glint Animation */
+@keyframes glint {
+  0% {
+    transform: translateX(-100%) translateY(-50%) rotate(45deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(200%) translateY(-50%) rotate(45deg);
+    opacity: 0;
+  }
+}
+
+.glint-animation {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(34, 211, 238, 0.1) 20%,
+    rgba(34, 211, 238, 0.7) 50%,
+    rgba(34, 211, 238, 0.1) 80%,
+    transparent 100%
+  );
+  width: 100%;
+  height: 300%;
+  position: absolute;
+  top: -100%;
+  left: 0;
+  filter: blur(8px);
+  animation: glint 4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation-delay: 0s;
+  animation-iteration-count: infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+

@@ -1,0 +1,77 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Diagonal gradient: lighter top-left to deeper bottom-right -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0F1115;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1A2030;stop-opacity:1" />
+    </linearGradient>
+    <!-- Radial highlight from top-left -->
+    <radialGradient id="innerGlow" cx="25%" cy="25%" r="70%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.12" />
+      <stop offset="40%" style="stop-color:#FFFFFF;stop-opacity:0.04" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0" />
+    </radialGradient>
+    <!-- Soft shadow for R -->
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
+      <feOffset dx="0" dy="4" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.1"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Rounded square background (squircle) -->
+  <rect width="1024" height="1024" rx="200" ry="200" fill="url(#bgGradient)"/>
+  <rect width="1024" height="1024" rx="200" ry="200" fill="url(#innerGlow)"/>
+  
+  <!-- Subtle border -->
+  <rect x="12" y="12" width="1000" height="1000" rx="192" ry="192" fill="none" stroke="#1A2030" stroke-width="1.5" opacity="0.25"/>
+  
+  <!-- Three candlestick bars (behind lower-right of R, very subtle) -->
+  <g transform="translate(512, 512)" opacity="0.15">
+    <!-- Candlestick 1 (left, shorter) -->
+    <rect x="-80" y="60" width="36" height="45" fill="#2A3140" rx="4"/>
+    <rect x="-80" y="60" width="36" height="16" fill="#2A3140" rx="4"/>
+    <!-- Candlestick 2 (center, taller) -->
+    <rect x="-10" y="30" width="36" height="75" fill="#2A3140" rx="4"/>
+    <rect x="-10" y="70" width="36" height="35" fill="#2A3140" rx="4"/>
+    <!-- Candlestick 3 (right, medium) -->
+    <rect x="60" y="50" width="36" height="55" fill="#2A3140" rx="4"/>
+    <rect x="60" y="50" width="36" height="20" fill="#2A3140" rx="4"/>
+  </g>
+  
+  <!-- Bold geometric R monogram (centered, crisp white) -->
+  <g transform="translate(512, 512)" filter="url(#softShadow)">
+    <!-- Left vertical stem (robust, thick) -->
+    <rect x="-260" y="-340" width="140" height="680" rx="32" fill="#F5F7FA"/>
+    
+    <!-- Top horizontal bar -->
+    <rect x="-120" y="-340" width="360" height="140" rx="32" fill="#F5F7FA"/>
+    
+    <!-- Distinct rounded upper loop (curved right side) -->
+    <path d="M -120 -200 Q -20 -200 80 -200 L 120 -200 L 120 -340 L -120 -340 Z" fill="#F5F7FA"/>
+    <rect x="80" y="-340" width="40" height="140" rx="20" fill="#F5F7FA"/>
+    
+    <!-- Middle horizontal bar -->
+    <rect x="-120" y="-80" width="240" height="120" rx="32" fill="#F5F7FA"/>
+    
+    <!-- Diagonal leg (extends clearly to bottom right) -->
+    <rect x="100" y="40" width="130" height="300" rx="32" fill="#F5F7FA" transform="rotate(42 165 190)"/>
+    
+    <!-- Bottom horizontal leg -->
+    <rect x="-120" y="200" width="200" height="120" rx="32" fill="#F5F7FA"/>
+    
+    <!-- Cyan accent dot (inside R's counter space, upper loop, bottom-right of that space) -->
+    <circle cx="50" cy="100" r="50" fill="#4CC9F0"/>
+  </g>
+  
+  <!-- Thin cyan line at bottom-right corner (extending from rounded edge) -->
+  <g transform="translate(1024, 1024)">
+    <rect x="-120" y="-120" width="90" height="6" rx="3" fill="#4CC9F0" transform="rotate(-45 -60 -60)"/>
+  </g>
+</svg>

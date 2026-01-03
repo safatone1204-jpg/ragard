@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ragard Icon Preview</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+      color: #f5f7fa;
+      padding: 40px;
+      margin: 0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin-bottom: 10px;
+      color: #4CC9F0;
+    }
+    .subtitle {
+      color: #888;
+      margin-bottom: 40px;
+    }
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 30px;
+      margin-bottom: 40px;
+    }
+    .icon-item {
+      text-align: center;
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #3a3a3a;
+    }
+    .icon-item h3 {
+      margin: 15px 0 10px 0;
+      font-size: 18px;
+      color: #4CC9F0;
+    }
+    .icon-item p {
+      margin: 5px 0;
+      font-size: 14px;
+      color: #aaa;
+    }
+    .icon-display {
+      background: #0F1115;
+      padding: 20px;
+      border-radius: 8px;
+      display: inline-block;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .icon-display img {
+      display: block;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    .checklist {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid #3a3a3a;
+    }
+    .checklist h2 {
+      margin-top: 0;
+      color: #4CC9F0;
+    }
+    .checklist ul {
+      list-style: none;
+      padding: 0;
+    }
+    .checklist li {
+      padding: 8px 0;
+      padding-left: 30px;
+      position: relative;
+    }
+    .checklist li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #4CC9F0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Ragard Extension Icon Preview</h1>
+    <p class="subtitle">Visual verification of all icon sizes</p>
+    
+    <div class="icon-grid">
+      <div class="icon-item">
+        <div class="icon-display">
+          <img src="icon16.png" alt="16x16" width="16" height="16">
+        </div>
+        <h3>16×16</h3>
+        <p>Toolbar icon</p>
+        <p>Should show clear "R"</p>
+      </div>
+      
+      <div class="icon-item">
+        <div class="icon-display">
+          <img src="icon32.png" alt="32x32" width="32" height="32">
+        </div>
+        <h3>32×32</h3>
+        <p>Standard size</p>
+        <p>R + subtle details</p>
+      </div>
+      
+      <div class="icon-item">
+        <div class="icon-display">
+          <img src="icon48.png" alt="48x48" width="48" height="48">
+        </div>
+        <h3>48×48</h3>
+        <p>Extension page</p>
+        <p>Candlesticks visible</p>
+      </div>
+      
+      <div class="icon-item">
+        <div class="icon-display">
+          <img src="icon128.png" alt="128x128" width="128" height="128">
+        </div>
+        <h3>128×128</h3>
+        <p>Chrome Web Store</p>
+        <p>Full premium detail</p>
+      </div>
+    </div>
+    
+    <div class="checklist">
+      <h2>Acceptance Criteria Check</h2>
+      <ul>
+        <li>16px: Dark rounded square with crisp white "R" and cyan accent</li>
+        <li>32/48px: Candlestick hint visible, R remains dominant</li>
+        <li>128px: Premium look with subtle gradient depth</li>
+        <li>No "document" or "paper" appearance</li>
+        <li>High contrast, readable at all sizes</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
+

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ragard Extension Settings</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    h1 {
+      color: #22c55e;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #9ca3af;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+    .section {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e5e7eb;
+      margin-bottom: 12px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: #9ca3af;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 12px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 6px;
+      color: #e5e7eb;
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+      box-sizing: border-box;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #22c55e;
+      box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+    }
+    button {
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: none;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #22c55e;
+      color: #020617;
+    }
+    .btn-primary:hover {
+      background: #16a34a;
+    }
+    .btn-secondary {
+      background: rgba(148, 163, 184, 0.2);
+      color: #9ca3af;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .btn-secondary:hover {
+      background: rgba(148, 163, 184, 0.3);
+    }
+    .status {
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+    }
+    .status.success {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      display: block;
+    }
+    .status.error {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      display: block;
+    }
+    .status.testing {
+      background: rgba(251, 191, 36, 0.2);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      display: block;
+    }
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Ragard Extension Settings</h1>
+  <p class="subtitle">Configure API and Web App URLs</p>
+
+  <div class="section">
+    <div class="section-title">API Configuration</div>
+    
+    <div class="form-group">
+      <label for="api-base-url">API Base URL</label>
+      <input type="text" id="api-base-url" placeholder="http://localhost:8000">
+      <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+        The backend API URL (e.g., http://localhost:8000 or https://api.yourdomain.com)
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="web-app-base-url">Web App Base URL</label>
+      <input type="text" id="web-app-base-url" placeholder="http://localhost:3000">
+      <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+        The frontend web app URL (e.g., http://localhost:3000 or https://yourdomain.com)
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button class="btn-primary" id="test-connection">Test Connection</button>
+      <button class="btn-secondary" id="save-settings">Save Settings</button>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
+

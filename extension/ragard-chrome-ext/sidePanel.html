@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ragard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 100%;
+      height: 100vh;
+      background: #020617;
+      color: #e5e7eb;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #ragard-panel-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+    
+    #ragard-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.5);
+      flex-shrink: 0;
+    }
+    
+    #ragard-panel-content {
+      padding: 16px;
+      padding-bottom: 24px;
+      color: #e5e7eb;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-y: auto;
+      flex: 1;
+    }
+    
+    .ragard-section {
+      margin-bottom: 16px;
+    }
+    
+    .ragard-section-title {
+      font-weight: 600;
+      font-size: 12px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    
+    .ragard-field {
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    
+    .ragard-field-label {
+      color: #9ca3af;
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+    
+    .ragard-field-value {
+      color: #e5e7eb;
+      word-break: break-word;
+    }
+    
+    .ragard-ticker-card {
+      background: rgba(11, 17, 32, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+    
+    .ragard-loading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #9ca3af;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .ragard-loading-dot {
+      width: 6px;
+      height: 6px;
+      background: #22c55e;
+      border-radius: 50%;
+      animation: ragard-pulse 1.4s ease-in-out infinite;
+    }
+    
+    .ragard-loading-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    
+    .ragard-loading-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    
+    @keyframes ragard-pulse {
+      0%, 80%, 100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+      }
+      40% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    
+    .ragard-error {
+      color: #f97373;
+      font-size: 12px;
+      padding: 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    
+    button {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    button:hover {
+      filter: brightness(1.1);
+    }
+    
+    button:active {
+      transform: translateY(1px);
+    }
+    
+    /* Tooltip styles */
+    .ragard-tooltip-container {
+      position: relative;
+      display: inline-block;
+    }
+    
+    .ragard-tooltip {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 6px;
+      padding: 5px 10px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 6px;
+      color: #e5e7eb;
+      font-size: 11px;
+      line-height: 1.2;
+      white-space: nowrap;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      max-width: 300px;
+      white-space: normal;
+    }
+    
+    .ragard-tooltip-container:hover .ragard-tooltip {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    .ragard-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: rgba(148, 163, 184, 0.3);
+    }
+    
+    .ragard-tooltip-title {
+      font-weight: 600;
+      color: #e5e7eb;
+      margin-bottom: 2px;
+      font-size: 11px;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    
+    .ragard-tooltip-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: block;
+    }
+    
+    .ragard-tooltip-list li {
+      display: block;
+      color: #9ca3af;
+      font-size: 10px;
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+    
+    .ragard-tooltip-list li:first-child {
+      margin-top: 0;
+    }
+    
+    .ragard-tooltip-list li::before {
+      content: '• ';
+      color: #fbbf24;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="ragard-panel-container">
+    <div id="ragard-panel-header">
+      <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+        <span style="font-weight: 600; font-size: 14px;">Ragard AI</span>
+        <span style="font-size: 10px; padding: 2px 6px; background: rgba(34, 197, 94, 0.2); border-radius: 4px; color: #22c55e;">BETA</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <button id="ragard-settings-btn" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 14px; padding: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;" title="Settings">⚙️</button>
+      </div>
+    </div>
+    <div id="ragard-panel-content">
+      <div style="color: #9ca3af; font-size: 12px; line-height: 1.5; text-align: center; padding: 20px 0;">
+        <div style="margin-bottom: 12px;">Click the button below to analyze this page.</div>
+        <button id="ragard-analyze-btn" style="width: 100%; padding: 12px 16px; border-radius: 999px; border: none; background: #22c55e; color: #020617; font-weight: 600; cursor: pointer; font-size: 13px; margin-top: 8px; box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3); transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
+          Analyze Page
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="config.js"></script>
+  <script src="authStatus.js"></script>
+  <script src="sidePanel.js"></script>
+</body>
+</html>
+

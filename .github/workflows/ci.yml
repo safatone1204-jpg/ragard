@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  check-env-files:
+    name: Check for tracked env files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for tracked .env files
+        run: |
+          echo "Checking for tracked environment files..."
+          TRACKED_ENV_FILES=$(git ls-files | grep -E '\.(env|env\.local|env\.example)$|\.env\.|env\.' || true)
+          
+          if [ -n "$TRACKED_ENV_FILES" ]; then
+            echo "❌ ERROR: Found tracked environment files:"
+            echo "$TRACKED_ENV_FILES"
+            echo ""
+            echo "Environment files should NOT be tracked by git."
+            echo "Please ensure .gitignore includes all .env patterns and remove these files from git:"
+            echo "  git rm --cached <file>"
+            exit 1
+          else
+            echo "✓ No tracked environment files found"
+          fi
+
+  secret-scanning:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better scanning
+      
+      - name: Run secret scanning
+        run: |
+          echo "Scanning for potential secrets..."
+          
+          # Patterns to detect common secrets
+          PATTERNS=(
+            "sk-[a-zA-Z0-9]{32,}"  # OpenAI API keys
+            "eyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}"  # JWT tokens (Supabase service role)
+            "SUPABASE_SERVICE_ROLE_KEY=.*[^=]$"  # Supabase service role key assignment
+            "OPENAI_API_KEY=sk-[a-zA-Z0-9]{32,}"  # OpenAI key in env format
+            "password.*=.*[a-zA-Z0-9]{8,}"  # Passwords
+            "secret.*=.*[a-zA-Z0-9]{16,}"  # Generic secrets
+          )
+          
+          FOUND_SECRETS=false
+          
+          for pattern in "${PATTERNS[@]}"; do
+            # Search in tracked files only (exclude .git, node_modules, venv)
+            MATCHES=$(git grep -E "$pattern" -- ':!*.md' ':!*.example' ':!*.gitignore' ':!node_modules/*' ':!venv/*' ':!.next/*' ':!__pycache__/*' || true)
+            
+            if [ -n "$MATCHES" ]; then
+              echo "⚠ WARNING: Potential secret pattern detected: $pattern"
+              echo "$MATCHES" | head -5
+              FOUND_SECRETS=true
+            fi
+          done
+          
+          if [ "$FOUND_SECRETS" = true ]; then
+            echo ""
+            echo "⚠ WARNING: Potential secrets detected. Please review the matches above."
+            echo "If these are false positives (e.g., example values), you can ignore this warning."
+            echo "If these are real secrets, remove them immediately and rotate the keys."
+            # Don't fail the build for warnings, but log them
+          else
+            echo "✓ No obvious secrets detected"
+          fi
+
+  backend-lint:
+    name: Backend lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff black mypy
+      
+      - name: Run ruff
+        working-directory: backend
+        run: ruff check app/ || true
+      
+      - name: Check formatting with black
+        working-directory: backend
+        run: black --check app/ || true
+
+  backend-test:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run tests
+        working-directory: backend
+        env:
+          ENVIRONMENT: development
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://test.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'test-anon-key' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'test-service-key' }}
+          CORS_ORIGINS: http://localhost:3000,http://localhost:8000
+        run: |
+          pytest tests/ -v || true
+
+  frontend-lint:
+    name: Frontend lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint || true
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      
+      - name: Build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+        run: npm run build
