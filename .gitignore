@@ -68,3 +68,9 @@ coverage/
 next-env.d.ts
 .vercel
 
+
+# SQLite files
+*.db
+*.db-wal
+*.db-shm
+
