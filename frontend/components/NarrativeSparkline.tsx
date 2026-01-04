@@ -66,7 +66,7 @@ export default function NarrativeSparkline({ metrics, mode = 'heat' }: Narrative
     <div className="w-full h-[50px]">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-	  <YAxis domain={[domainMin, domainMax]} />
+          <YAxis domain={[domainMin, domainMax]} />
           <XAxis
             dataKey="label"
             tick={{ fill: '#6B7280', fontSize: 10 }}
