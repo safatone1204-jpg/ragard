@@ -43,12 +43,12 @@ export async function signUp(
       return { user: null, error: error.message }
     }
 
-    if (data.session) {
+    if (data.session && data.user) {
       await saveAccessToken(data.session.access_token)
       const userMetadata = data.user.user_metadata || {}
-      const user = {
+      const user: AuthUser = {
         id: data.user.id,
-        email: data.user.email,
+        email: data.user.email || null,
         firstName: userMetadata.first_name || null,
         lastName: userMetadata.last_name || null,
         createdAt: data.user.created_at || null,
@@ -60,9 +60,9 @@ export async function signUp(
     // If no session (email confirmation required), still return user
     if (data.user) {
       const userMetadata = data.user.user_metadata || {}
-      const user = {
+      const user: AuthUser = {
         id: data.user.id,
-        email: data.user.email,
+        email: data.user.email || null,
         firstName: userMetadata.first_name || null,
         lastName: userMetadata.last_name || null,
         createdAt: data.user.created_at || null,
@@ -93,9 +93,9 @@ export async function signIn(email: string, password: string): Promise<AuthRespo
     if (data.session && data.user) {
       await saveAccessToken(data.session.access_token)
       const userMetadata = data.user.user_metadata || {}
-      const user = {
+      const user: AuthUser = {
         id: data.user.id,
-        email: data.user.email,
+        email: data.user.email || null,
         firstName: userMetadata.first_name || null,
         lastName: userMetadata.last_name || null,
         createdAt: data.user.created_at || null,
