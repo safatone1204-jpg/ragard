@@ -61,7 +61,7 @@ export function validateEnvVars(): ValidationResult {
  * Show error UI if env vars are missing.
  * Call this in a React component or error boundary.
  */
-export function showEnvErrorUI(result: ValidationResult): React.ReactElement | null {
+export function showEnvErrorUI(result: ValidationResult): JSX.Element | null {
   if (result.valid) {
     return null
   }
