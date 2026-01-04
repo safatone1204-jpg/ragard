@@ -1,7 +1,7 @@
 'use client'
 
-import { LineChart, Line, XAxis, ResponsiveContainer, Tooltip } from 'recharts'
-import { Narrative, TimeframeKey } from '@/types/narratives'
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
+import { TimeframeKey } from '@/types/narratives'
 
 interface NarrativeSparklineProps {
   metrics: {
@@ -66,6 +66,7 @@ export default function NarrativeSparkline({ metrics, mode = 'heat' }: Narrative
     <div className="w-full h-[50px]">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+	  <YAxis domain={[domainMin, domainMax]} />
           <XAxis
             dataKey="label"
             tick={{ fill: '#6B7280', fontSize: 10 }}
@@ -80,7 +81,6 @@ export default function NarrativeSparkline({ metrics, mode = 'heat' }: Narrative
             strokeWidth={2.5}
             dot={{ fill: strokeColor, r: 4 }}
             activeDot={{ r: 6 }}
-            domain={[domainMin, domainMax]}
           />
         </LineChart>
       </ResponsiveContainer>
