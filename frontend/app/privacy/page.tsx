@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 export default function PrivacyPage() {
   return (
     <div className="max-w-4xl mx-auto">
