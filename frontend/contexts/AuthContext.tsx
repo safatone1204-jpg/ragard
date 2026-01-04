@@ -32,10 +32,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const meResponse = await callRagardAPI('/api/me', {
               method: 'GET',
-            })
+            }) as AuthUser
 
             if (meResponse && meResponse.id) {
-              const currentUser = {
+              const currentUser: AuthUser = {
                 id: meResponse.id,
                 email: meResponse.email,
                 firstName: meResponse.firstName || storedUser.firstName || null,

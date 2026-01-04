@@ -19,11 +19,11 @@ export async function clearAccessToken(): Promise<void> {
   localStorage.removeItem(USER_STORAGE_KEY)
 }
 
-export function saveUser(user: { id: string; email: string | null; firstName?: string | null; lastName?: string | null }): void {
+export function saveUser(user: { id: string; email: string | null; firstName?: string | null; lastName?: string | null; createdAt?: string | null }): void {
   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
 }
 
-export function getUser(): { id: string; email: string | null; firstName?: string | null; lastName?: string | null } | null {
+export function getUser(): { id: string; email: string | null; firstName?: string | null; lastName?: string | null; createdAt?: string | null } | null {
   const stored = localStorage.getItem(USER_STORAGE_KEY)
   if (!stored) return null
   try {
