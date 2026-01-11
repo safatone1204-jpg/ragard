@@ -1,9 +1,17 @@
-"""Reddit post ingestion using Async PRAW (Python Reddit API Wrapper)."""
+"""Reddit post ingestion using Async PRAW with a production-safe fallback (public JSON)."""
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import asyncio
+import logging
+from typing import Optional
+
 import asyncpraw
+
 from app.narratives.config import TimeframeKey
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Subreddits to monitor
 REDDIT_SUBREDDITS = [
@@ -27,171 +35,197 @@ class RedditPost:
 
 
 def _get_timeframe_delta(timeframe: TimeframeKey) -> timedelta:
-    """Convert timeframe to timedelta."""
     if timeframe == "24h":
         return timedelta(days=1)
-    elif timeframe == "7d":
+    if timeframe == "7d":
         return timedelta(days=7)
-    elif timeframe == "30d":
+    if timeframe == "30d":
         return timedelta(days=30)
-    else:
-        return timedelta(days=1)
+    return timedelta(days=1)
+
+
+def _get_user_agent() -> str:
+    return getattr(
+        settings,
+        "REDDIT_USER_AGENT",
+        "web:ragardai:v1.0.0 (by /u/Sahm_87)",
+    )
 
 
 def _get_reddit_client() -> asyncpraw.Reddit:
     """
-    Create and return an Async PRAW Reddit client.
-    
-    Requires Reddit API credentials in environment variables:
-    - REDDIT_CLIENT_ID: Your Reddit application client ID
-    - REDDIT_CLIENT_SECRET: Your Reddit application client secret
-    - REDDIT_USER_AGENT: User agent string (e.g., "Ragard/1.0 by YourUsername")
-    
-    Optional (for authenticated access):
-    - REDDIT_USERNAME: Reddit username
-    - REDDIT_PASSWORD: Reddit password
-    
-    To get credentials:
-    1. Go to https://www.reddit.com/prefs/apps
-    2. Click "create another app..." or "create app"
-    3. Choose "script" as the app type
-    4. Copy the client ID (under the app name) and secret
-    5. Set user_agent to something like: "Ragard/1.0 by YourUsername"
+    Async PRAW client.
+
+    NOTE: Reddit OAuth may fail on cloud hosts (Railway) even if it works locally.
+    We will fall back to public JSON if we see 401s.
     """
-    # Check if credentials are provided
-    client_id = getattr(settings, 'REDDIT_CLIENT_ID', None)
-    client_secret = getattr(settings, 'REDDIT_CLIENT_SECRET', None)
-    user_agent = getattr(settings, 'REDDIT_USER_AGENT', 'Ragard/1.0 (Stock Analysis Bot)')
-    
-    # If credentials are not provided, use read-only mode (limited rate limits)
+    client_id = getattr(settings, "REDDIT_CLIENT_ID", None)
+    client_secret = getattr(settings, "REDDIT_CLIENT_SECRET", None)
+    user_agent = _get_user_agent()
+
     if not client_id or not client_secret:
-        # Read-only mode - no auth required, but has stricter rate limits
-        # Note: Read-only mode may not work reliably for fetching posts
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(
-            "Reddit API credentials not configured. Attempting read-only mode. "
-            "For better reliability, set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in .env. "
-            "See backend/REDDIT_SETUP.md for instructions."
-        )
-        reddit = asyncpraw.Reddit(
-            client_id=None,
-            client_secret=None,
-            user_agent=user_agent,
-        )
-    else:
-        # Authenticated mode - better rate limits
-        username = getattr(settings, 'REDDIT_USERNAME', None)
-        password = getattr(settings, 'REDDIT_PASSWORD', None)
-        
-        if username and password:
-            # Authenticated user access
-            reddit = asyncpraw.Reddit(
-                client_id=client_id,
-                client_secret=client_secret,
-                username=username,
-                password=password,
-                user_agent=user_agent,
-            )
-        else:
-            # Application-only (OAuth) access - better than read-only
-            reddit = asyncpraw.Reddit(
-                client_id=client_id,
-                client_secret=client_secret,
-                user_agent=user_agent,
-            )
-    
+        logger.warning("Reddit client_id/secret missing; PRAW will not be used.")
+        # Return a "read-only" client anyway, but it's likely not useful.
+        return asyncpraw.Reddit(client_id=None, client_secret=None, user_agent=user_agent)
+
+    # IMPORTANT: Do NOT pass username/password in production.
+    # It frequently gets rejected from datacenter IPs.
+    reddit = asyncpraw.Reddit(
+        client_id=client_id,
+        client_secret=client_secret,
+        user_agent=user_agent,
+    )
+    reddit.read_only = True
     return reddit
+
+
+async def _fetch_subreddit_public_json(
+    subreddit_name: str,
+    cutoff_time: datetime,
+    limit: int = 100,
+) -> list[RedditPost]:
+    """
+    Production-safe fallback: pull from Reddit's public JSON endpoint (no OAuth).
+    Endpoint: https://www.reddit.com/r/<sub>/new.json
+
+    This avoids the common “works locally, 401 in cloud” OAuth problem.
+    """
+    import httpx  # ensure httpx is installed in backend deps
+
+    url = f"https://www.reddit.com/r/{subreddit_name}/new.json"
+    params = {"limit": str(limit), "raw_json": "1"}
+
+    headers = {
+        "User-Agent": _get_user_agent(),
+        "Accept": "application/json",
+    }
+
+    # small retry for rate limits / transient errors
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                resp = await client.get(url, params=params, headers=headers)
+
+            if resp.status_code == 429:
+                # rate limited; backoff
+                wait_s = 2 ** attempt
+                logger.warning(f"Reddit public JSON 429 for r/{subreddit_name}. Backing off {wait_s}s.")
+                await asyncio.sleep(wait_s)
+                continue
+
+            if resp.status_code != 200:
+                raise RuntimeError(f"public JSON status={resp.status_code} body={resp.text[:200]}")
+
+            data = resp.json()
+            children = (data.get("data") or {}).get("children") or []
+
+            posts: list[RedditPost] = []
+            for child in children:
+                p = (child or {}).get("data") or {}
+                created_utc = p.get("created_utc")
+                if not created_utc:
+                    continue
+
+                created_at = datetime.utcfromtimestamp(created_utc)
+                if created_at < cutoff_time:
+                    break  # results are newest-first
+
+                title = p.get("title") or ""
+                selftext = p.get("selftext") or None
+
+                posts.append(
+                    RedditPost(
+                        id=str(p.get("id") or ""),
+                        subreddit=subreddit_name,
+                        title=title,
+                        selftext=selftext,
+                        created_at=created_at,
+                    )
+                )
+
+            return posts
+
+        except Exception as e:
+            if attempt == 2:
+                logger.warning(f"Public JSON fetch failed for r/{subreddit_name}: {e}")
+                return []
+            await asyncio.sleep(1 + attempt)
+
+    return []
 
 
 async def get_recent_reddit_posts(
     subreddits: list[str],
-    timeframe: TimeframeKey
+    timeframe: TimeframeKey,
 ) -> list[RedditPost]:
-    """
-    Fetch recent Reddit posts from specified subreddits within the timeframe using Async PRAW.
-    
-    Args:
-        subreddits: List of subreddit names (without 'r/')
-        timeframe: Timeframe key (24h, 7d, 30d)
-    
-    Returns:
-        List of RedditPost objects (empty list if Reddit client fails)
-    """
     posts: list[RedditPost] = []
     now = datetime.utcnow()
     cutoff_time = now - _get_timeframe_delta(timeframe)
-    
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.debug(f"Fetching Reddit posts for timeframe {timeframe}: cutoff_time={cutoff_time}, now={now}")
-    
-    reddit = None
+
+    logger.info(f"Fetching Reddit posts for timeframe: {timeframe}")
+
+    # Try PRAW first, but if we see 401 anywhere, switch to public JSON for all.
+    use_public_only = False
+    reddit: Optional[asyncpraw.Reddit] = None
+
     try:
         reddit = _get_reddit_client()
-        
-        # Check if we're in read-only mode
-        client_id = getattr(settings, 'REDDIT_CLIENT_ID', None)
-        client_secret = getattr(settings, 'REDDIT_CLIENT_SECRET', None)
-        if not client_id or not client_secret:
-            logger.warning(
-                "Reddit API credentials not configured. Using read-only mode which has strict rate limits. "
-                "Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in .env for better performance. "
-                "See backend/REDDIT_SETUP.md for instructions."
-            )
-        
+
         for subreddit_name in subreddits:
+            if use_public_only:
+                posts.extend(await _fetch_subreddit_public_json(subreddit_name, cutoff_time))
+                continue
+
             try:
                 subreddit = await reddit.subreddit(subreddit_name)
-                subreddit_posts_count = 0
-                
-                # Fetch new posts (limit can be up to 100 per request)
-                # Async PRAW handles rate limiting automatically
+                count = 0
+
                 async for submission in subreddit.new(limit=100):
-                    # Convert Async PRAW submission to RedditPost
                     created_at = datetime.utcfromtimestamp(submission.created_utc)
-                    
-                    # Only include posts within timeframe
-                    if created_at >= cutoff_time:
-                        post = RedditPost(
+                    if created_at < cutoff_time:
+                        break
+
+                    posts.append(
+                        RedditPost(
                             id=submission.id,
                             subreddit=subreddit_name,
                             title=submission.title,
                             selftext=submission.selftext if submission.selftext else None,
                             created_at=created_at,
                         )
-                        posts.append(post)
-                        subreddit_posts_count += 1
-                    else:
-                        # Posts are sorted by time, so we can break early
-                        # (older posts won't be in timeframe)
-                        break
-                
-                logger.debug(f"Found {subreddit_posts_count} posts in r/{subreddit_name} for timeframe {timeframe}")
-                        
+                    )
+                    count += 1
+
+                logger.debug(f"Found {count} posts in r/{subreddit_name} via PRAW for {timeframe}")
+
             except Exception as e:
-                # Log error at warning level so it's visible
-                logger.warning(f"Error fetching from r/{subreddit_name}: {e}")
-                logger.debug(f"Full error details for r/{subreddit_name}:", exc_info=True)
-                continue
-                
+                msg = str(e).lower()
+                # AsyncPRAW often reports 401 like: "received 401 HTTP response"
+                if "401" in msg or "unauthorized" in msg:
+                    logger.warning(
+                        f"PRAW got 401 in production for r/{subreddit_name}. "
+                        f"Switching to public JSON fallback for all subreddits."
+                    )
+                    use_public_only = True
+                    # fetch this subreddit via fallback too
+                    posts.extend(await _fetch_subreddit_public_json(subreddit_name, cutoff_time))
+                else:
+                    logger.warning(f"Error fetching from r/{subreddit_name}: {e}")
+                    continue
+
     except Exception as e:
-        # Log initialization errors at warning level so they're visible
-        logger.warning(f"Error initializing Reddit client: {e}")
-        logger.warning("Make sure REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET are set in .env")
-        logger.warning("See backend/REDDIT_SETUP.md for setup instructions")
-        logger.debug("Full error details:", exc_info=True)
-        # Return empty list rather than crashing
-        return []
+        logger.warning(f"Error initializing Reddit client: {e}. Using public JSON fallback.")
+        use_public_only = True
+        for subreddit_name in subreddits:
+            posts.extend(await _fetch_subreddit_public_json(subreddit_name, cutoff_time))
+
     finally:
-        # Always close the Reddit client to clean up connections, even if errors occurred
         if reddit is not None:
             try:
                 await reddit.close()
-            except Exception as e:
-                logger.warning(f"Error closing Reddit client: {e}")
-    
-    # Sort by created_at descending (newest first)
+            except Exception:
+                pass
+
     posts.sort(key=lambda p: p.created_at, reverse=True)
-    
+    logger.info(f"Fetched {len(posts)} Reddit posts for timeframe {timeframe}")
     return posts
