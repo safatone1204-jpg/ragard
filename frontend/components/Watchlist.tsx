@@ -119,11 +119,14 @@ export default function Watchlist() {
     abortControllerRef.current = new AbortController()
 
     async function loadItems() {
+      const watchlistId = currentWatchlistId
+      if (!watchlistId) return
+
       try {
         setItemsLoading(true)
         setError(null)
         
-        const items = await getWatchlistItems(currentWatchlistId)
+        const items = await getWatchlistItems(watchlistId)
         
         if (abortControllerRef.current?.signal.aborted) return
         
