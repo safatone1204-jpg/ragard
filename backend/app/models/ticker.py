@@ -29,5 +29,7 @@ class Ticker(BaseModel):
     market_cap: Optional[Decimal] = None
     ragard_score: Optional[int] = Field(None, ge=0, le=100, description="Ragard score 0-100")
     risk_level: str = Field(..., description="Risk level: low, moderate, high, extreme")
+    regard_data_completeness: Optional[str] = Field(None, description="Data completeness: full, partial, unknown")
+    regard_missing_factors: Optional[list[str]] = Field(None, description="List of missing data factors")
 
 

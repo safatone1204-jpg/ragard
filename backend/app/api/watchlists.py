@@ -20,6 +20,11 @@ class WatchlistCreate(BaseModel):
     name: str
 
 
+class WatchlistUpdate(BaseModel):
+    """Request model for updating a watchlist."""
+    name: str
+
+
 class WatchlistItemCreate(BaseModel):
     """Request model for adding an item to a watchlist."""
     ticker: str
@@ -172,6 +177,85 @@ async def delete_watchlist(
         )
 
 
+@router.put("/watchlists/{watchlist_id}", response_model=WatchlistResponse)
+@limiter.limit(get_rate_limit())
+async def update_watchlist(
+    request: Request,
+    watchlist_id: str,
+    watchlist_data: WatchlistUpdate,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Update a watchlist name.
+    
+    Args:
+        watchlist_id: UUID of the watchlist
+        watchlist_data: New watchlist name
+        
+    Returns:
+        Updated watchlist
+    """
+    # Validate name
+    if not watchlist_data.name or not watchlist_data.name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Watchlist name cannot be empty"
+        )
+    
+    try:
+        supabase = get_supabase_admin()
+        
+        # Verify ownership and update
+        response = supabase.table("watchlists")\
+            .update({"name": watchlist_data.name.strip()})\
+            .eq("id", watchlist_id)\
+            .eq("user_id", current_user.id)\
+            .execute()
+        
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Watchlist not found"
+            )
+        
+        return WatchlistResponse(**response.data[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating watchlist {watchlist_id} for user {current_user.id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+def _validate_ticker(ticker: str) -> str:
+    """Validate and normalize ticker symbol."""
+    if not ticker or not ticker.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticker cannot be empty"
+        )
+    
+    normalized = ticker.strip().upper()
+    
+    # Basic validation: 1-10 characters, alphanumeric only
+    if len(normalized) < 1 or len(normalized) > 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticker must be between 1 and 10 characters"
+        )
+    
+    if not normalized.replace('.', '').replace('-', '').isalnum():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticker contains invalid characters"
+        )
+    
+    return normalized
+
+
 @router.post("/watchlists/{watchlist_id}/items", response_model=WatchlistItemResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(get_rate_limit())
 async def add_watchlist_item(
@@ -190,12 +274,8 @@ async def add_watchlist_item(
     Returns:
         Created watchlist item
     """
-    # Validate ticker
-    if not item_data.ticker or not item_data.ticker.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ticker cannot be empty"
-        )
+    # Validate and normalize ticker
+    normalized_ticker = _validate_ticker(item_data.ticker)
     
     try:
         supabase = get_supabase_admin()
@@ -213,11 +293,24 @@ async def add_watchlist_item(
                 detail="Watchlist not found"
             )
         
+        # Check if ticker already exists in this watchlist
+        existing_item = supabase.table("watchlist_items")\
+            .select("id, ticker")\
+            .eq("watchlist_id", watchlist_id)\
+            .eq("ticker", normalized_ticker)\
+            .execute()
+        
+        if existing_item.data:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ticker {normalized_ticker} is already in this watchlist"
+            )
+        
         # Insert item
         response = supabase.table("watchlist_items")\
             .insert({
                 "watchlist_id": watchlist_id,
-                "ticker": item_data.ticker.strip().upper()
+                "ticker": normalized_ticker
             })\
             .execute()
         
@@ -232,6 +325,13 @@ async def add_watchlist_item(
     except HTTPException:
         raise
     except Exception as e:
+        # Check for unique constraint violation (PostgreSQL error code 23505)
+        error_str = str(e).lower()
+        if 'unique' in error_str or 'duplicate' in error_str or '23505' in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ticker {normalized_ticker} is already in this watchlist"
+            )
         logger.error(f"Error adding item to watchlist {watchlist_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -343,6 +443,62 @@ async def delete_watchlist_item(
         raise
     except Exception as e:
         logger.error(f"Error deleting item {item_id} from watchlist {watchlist_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.get("/watchlists/items/status", response_model=dict)
+@limiter.limit(get_rate_limit())
+async def get_ticker_watchlist_status(
+    request: Request,
+    ticker: str,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Get which watchlists contain a specific ticker.
+    Useful for extensions to check watchlist status efficiently.
+    
+    Args:
+        ticker: Ticker symbol to check
+        
+    Returns:
+        Dictionary with ticker and list of watchlist IDs that contain it
+    """
+    try:
+        normalized_ticker = _validate_ticker(ticker)
+        supabase = get_supabase_admin()
+        
+        # Get all user's watchlists
+        watchlists_response = supabase.table("watchlists")\
+            .select("id")\
+            .eq("user_id", current_user.id)\
+            .execute()
+        
+        watchlist_ids = [wl["id"] for wl in watchlists_response.data]
+        
+        if not watchlist_ids:
+            return {"ticker": normalized_ticker, "watchlist_ids": []}
+        
+        # Check which watchlists contain this ticker
+        items_response = supabase.table("watchlist_items")\
+            .select("watchlist_id")\
+            .in_("watchlist_id", watchlist_ids)\
+            .eq("ticker", normalized_ticker)\
+            .execute()
+        
+        watchlist_ids_with_ticker = [item["watchlist_id"] for item in items_response.data]
+        
+        return {
+            "ticker": normalized_ticker,
+            "watchlist_ids": watchlist_ids_with_ticker
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking ticker status for user {current_user.id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"

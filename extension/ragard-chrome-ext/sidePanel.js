@@ -368,7 +368,7 @@
 
   // Get trust level color
   function getTrustColor(trustLevel) {
-    if (trustLevel === 'high') return { hex: '#22c55e', rgb: '34, 197, 94' };
+    if (trustLevel === 'high') return { hex: '#22D3EE', rgb: '34, 211, 238' };
     if (trustLevel === 'medium') return { hex: '#fbbf24', rgb: '251, 191, 36' };
     if (trustLevel === 'low') return { hex: '#f97373', rgb: '249, 115, 115' };
     return { hex: '#9ca3af', rgb: '148, 163, 184' };
@@ -464,7 +464,7 @@
       <div class="ragard-field" style="margin-top: 8px;">
         <div class="ragard-field-label">${platform === 'article_site' ? 'Source' : 'Author'}</div>
         <div class="ragard-field-value">
-          ${profileUrl ? `<a href="${profileUrl}" target="_blank" style="color: #22c55e; text-decoration: none;">${displayName}</a>` : displayName}
+          ${profileUrl ? `<a href="${profileUrl}" target="_blank" style="color: #22D3EE; text-decoration: none;">${displayName}</a>` : displayName}
           ${handle && handle !== displayName ? ` <span style="color: #6b7280; font-size: 11px;">(${handle})</span>` : ''}
         </div>
         <div style="font-size: 10px; color: #6b7280; margin-top: 4px;">Platform: ${platformDisplay}</div>
@@ -479,7 +479,7 @@
     }
     if (metadata.domainReputation) {
       const repColors = {
-        'high': { bg: 'rgba(34, 197, 94, 0.2)', color: '#22c55e', text: 'High Reputation' },
+        'high': { bg: 'rgba(34, 211, 238, 0.2)', color: '#22D3EE', text: 'High Reputation' },
         'medium': { bg: 'rgba(251, 191, 36, 0.2)', color: '#fbbf24', text: 'Medium Reputation' },
         'low': { bg: 'rgba(249, 115, 115, 0.2)', color: '#f97373', text: 'Low Reputation' }
       };
@@ -741,60 +741,61 @@
         }
       }
       
-      // Check watchlist status (only if logged in)
-      let watchlists = [];
+      // Check watchlist status (only if logged in) - OPTIMIZED: use efficient endpoint
       let tickerWatchlistMap = new Map();
       
-      // Check auth status first (force refresh to ensure we have latest status)
-      await checkAuthStatus(true);
-      console.log('[Ragard] Auth state after check:', JSON.stringify(authState, null, 2));
-      console.log('[Ragard] authState.isLoggedIn:', authState.isLoggedIn, 'type:', typeof authState.isLoggedIn);
+      // Check auth status (non-blocking, start in parallel with other operations)
+      const authCheckPromise = checkAuthStatus(true).then(() => {
+        console.log('[Ragard] Auth state after check:', JSON.stringify(authState, null, 2));
+        console.log('[Ragard] authState.isLoggedIn:', authState.isLoggedIn, 'type:', typeof authState.isLoggedIn);
+        return authState;
+      }).catch(() => authState);
       
-      if (authState.isLoggedIn) {
+      // Wait for auth check to complete before checking watchlists
+      const authStateResult = await authCheckPromise;
+      
+      if (authStateResult.isLoggedIn) {
         try {
           const authToken = await getAuthToken();
           if (authToken) {
             const apiBaseUrl = await window.ragardConfig?.getApiBaseUrl() || 'http://localhost:8000';
-            const watchlistResponse = await fetch(`${apiBaseUrl}/api/watchlists`, {
-              headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'Content-Type': 'application/json'
-              },
-              mode: 'cors',
-              credentials: 'omit'
-            });
-            if (watchlistResponse.ok) {
-              watchlists = await watchlistResponse.json();
-              for (const ticker of enrichedTickers) {
-                const symbol = (ticker.symbol || ticker || '').toString().toUpperCase();
-                if (!symbol) continue;
-                const inWatchlists = new Set();
-                for (const wl of watchlists) {
-                  try {
-                    const itemsResponse = await fetch(`${apiBaseUrl}/api/watchlists/${wl.id}/items`, {
-                      headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                      },
-                      mode: 'cors',
-                      credentials: 'omit'
-                    });
-                    if (itemsResponse.ok) {
-                      const items = await itemsResponse.json();
-                      if (items.some(item => item.ticker === symbol)) {
-                        inWatchlists.add(wl.id);
-                      }
-                    }
-                  } catch (e) {
-                    // Ignore errors
-                  }
+            
+            // Get unique ticker symbols
+            const uniqueTickers = [...new Set(enrichedTickers.map(t => (t.symbol || t || '').toString().toUpperCase()).filter(Boolean))];
+            
+            // Use efficient endpoint to check watchlist status for all tickers in parallel
+            const watchlistStatusChecks = uniqueTickers.map(async (symbol) => {
+              try {
+                const statusResponse = await fetch(`${apiBaseUrl}/api/watchlists/items/status?ticker=${encodeURIComponent(symbol)}`, {
+                  headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  mode: 'cors',
+                  credentials: 'omit'
+                });
+                
+                if (statusResponse.ok) {
+                  const status = await statusResponse.json();
+                  return { symbol, watchlistIds: status.watchlist_ids || [] };
                 }
-                tickerWatchlistMap.set(symbol, inWatchlists);
+              } catch (e) {
+                // Ignore errors for individual tickers
+                console.warn(`[Ragard] Failed to check watchlist status for ${symbol}:`, e);
               }
-            }
+              return { symbol, watchlistIds: [] };
+            });
+            
+            const watchlistStatusResults = await Promise.all(watchlistStatusChecks);
+            watchlistStatusResults.forEach(({ symbol, watchlistIds }) => {
+              if (symbol && watchlistIds.length > 0) {
+                tickerWatchlistMap.set(symbol, new Set(watchlistIds));
+              }
+            });
           }
         } catch (e) {
-          // Not authenticated or API error
+          // Not authenticated or API error - silently continue
+          console.warn('[Ragard] Watchlist status check failed:', e);
         }
       }
       
@@ -816,7 +817,8 @@
               ? `${ticker.change_1d_pct >= 0 ? '+' : ''}${ticker.change_1d_pct.toFixed(2)}%`
               : 'N/A';
             const changeColor = ticker.change_1d_pct >= 0 ? '#22c55e' : '#f97373';
-            const inWatchlist = tickerWatchlistMap.get(ticker.symbol || ticker)?.size > 0;
+            const tickerSymbol = (ticker.symbol || ticker || '').toString().toUpperCase();
+            const inWatchlist = tickerWatchlistMap.get(tickerSymbol)?.size > 0;
             
             return `
               <div class="ragard-ticker-card">
@@ -824,7 +826,7 @@
                   <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
                     <span style="font-weight: 700; font-size: 16px; color: #e5e7eb;">${ticker.symbol}</span>
                     ${authState.isLoggedIn ? `
-                      <button class="ragard-ticker-action" data-ticker="${ticker.symbol || ticker}" data-action="watchlist" data-in-watchlist="${inWatchlist}" style="padding: 2px 6px; background: ${inWatchlist ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)'}; color: ${inWatchlist ? '#22c55e' : '#9ca3af'}; border: 1px solid ${inWatchlist ? 'rgba(34, 197, 94, 0.3)' : 'rgba(148, 163, 184, 0.3)'}; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 1; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+                      <button class="ragard-ticker-action" data-ticker="${ticker.symbol || ticker}" data-action="watchlist" data-in-watchlist="${inWatchlist}" style="padding: 2px 6px; background: ${inWatchlist ? 'rgba(34, 211, 238, 0.2)' : 'rgba(148, 163, 184, 0.1)'}; color: ${inWatchlist ? '#22D3EE' : '#9ca3af'}; border: 1px solid ${inWatchlist ? 'rgba(34, 211, 238, 0.3)' : 'rgba(148, 163, 184, 0.3)'}; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 1; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
                         ${inWatchlist ? '⭐' : '☆'}
                       </button>
                     ` : ''}
@@ -844,7 +846,7 @@
                 </div>
                 ${!authState.isLoggedIn ? `
                   <div style="font-size: 9px; color: #6b7280; margin-top: -4px; margin-bottom: 4px; text-align: left; font-style: italic;">
-                    Log in to use watchlists
+                    Sign in at ragardai.com — sidebar uses the same account
                   </div>
                 ` : ''}
                 <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #9ca3af; margin-bottom: 4px;">
@@ -853,7 +855,7 @@
                 </div>
                 ${ticker.narratives && ticker.narratives.length > 0 
                   ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; margin-bottom: 4px;">
-                      ${ticker.narratives.map(n => `<span style="font-size: 10px; padding: 2px 6px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 6px; color: #22c55e;">${n}</span>`).join('')}
+                      ${ticker.narratives.map(n => `<span style="font-size: 10px; padding: 2px 6px; background: rgba(34, 211, 238, 0.1); border: 1px solid rgba(34, 211, 238, 0.2); border-radius: 6px; color: #22D3EE;">${n}</span>`).join('')}
                     </div>`
                   : ''
                 }
@@ -899,6 +901,9 @@
                     💡 You keep seeing this ticker. Consider adding it to a watchlist?
                   </div>
                 ` : ''}
+                <div style="margin-top: 8px;">
+                  <button class="ragard-ticker-profile-btn" data-ticker="${ticker.symbol || ticker}" style="padding: 4px 10px; font-size: 11px; background: rgba(148, 163, 184, 0.15); color: #22D3EE; border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 6px; cursor: pointer;">View profile →</button>
+                </div>
               </div>
             `;
           }).join('')}
@@ -915,7 +920,8 @@
               ? `${ticker.change_1d_pct >= 0 ? '+' : ''}${ticker.change_1d_pct.toFixed(2)}%`
               : 'N/A';
             const changeColor = ticker.change_1d_pct >= 0 ? '#22c55e' : '#f97373';
-            const inWatchlist = tickerWatchlistMap.get(ticker.symbol || ticker)?.size > 0;
+            const tickerSymbol = (ticker.symbol || ticker || '').toString().toUpperCase();
+            const inWatchlist = tickerWatchlistMap.get(tickerSymbol)?.size > 0;
             
             return `
               <div class="ragard-ticker-card">
@@ -923,7 +929,7 @@
                   <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
                     <span style="font-weight: 700; font-size: 16px; color: #e5e7eb;">${ticker.symbol}</span>
                     ${authState.isLoggedIn ? `
-                      <button class="ragard-ticker-action" data-ticker="${ticker.symbol || ticker}" data-action="watchlist" data-in-watchlist="${inWatchlist}" style="padding: 2px 6px; background: ${inWatchlist ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)'}; color: ${inWatchlist ? '#22c55e' : '#9ca3af'}; border: 1px solid ${inWatchlist ? 'rgba(34, 197, 94, 0.3)' : 'rgba(148, 163, 184, 0.3)'}; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 1; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+                      <button class="ragard-ticker-action" data-ticker="${ticker.symbol || ticker}" data-action="watchlist" data-in-watchlist="${inWatchlist}" style="padding: 2px 6px; background: ${inWatchlist ? 'rgba(34, 211, 238, 0.2)' : 'rgba(148, 163, 184, 0.1)'}; color: ${inWatchlist ? '#22D3EE' : '#9ca3af'}; border: 1px solid ${inWatchlist ? 'rgba(34, 211, 238, 0.3)' : 'rgba(148, 163, 184, 0.3)'}; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 1; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
                         ${inWatchlist ? '⭐' : '☆'}
                       </button>
                     ` : ''}
@@ -943,7 +949,7 @@
                 </div>
                 ${!authState.isLoggedIn ? `
                   <div style="font-size: 9px; color: #6b7280; margin-top: -4px; margin-bottom: 4px; text-align: left; font-style: italic;">
-                    Log in to use watchlists
+                    Sign in at ragardai.com — sidebar uses the same account
                   </div>
                 ` : ''}
                 <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #9ca3af; margin-bottom: 4px;">
@@ -952,7 +958,7 @@
                 </div>
                 ${ticker.narratives && ticker.narratives.length > 0 
                   ? `<div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; margin-bottom: 4px;">
-                      ${ticker.narratives.map(n => `<span style="font-size: 10px; padding: 2px 6px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 6px; color: #22c55e;">${n}</span>`).join('')}
+                      ${ticker.narratives.map(n => `<span style="font-size: 10px; padding: 2px 6px; background: rgba(34, 211, 238, 0.1); border: 1px solid rgba(34, 211, 238, 0.2); border-radius: 6px; color: #22D3EE;">${n}</span>`).join('')}
                     </div>`
                   : ''
                 }
@@ -995,6 +1001,9 @@
                     💡 You keep seeing this ticker. Consider adding it to a watchlist?
                   </div>
                 ` : ''}
+                <div style="margin-top: 8px;">
+                  <button class="ragard-ticker-profile-btn" data-ticker="${ticker.symbol || ticker}" style="padding: 4px 10px; font-size: 11px; background: rgba(148, 163, 184, 0.15); color: #22D3EE; border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 6px; cursor: pointer;">View profile →</button>
+                </div>
               </div>
             `;
           }).join('')}
@@ -1011,47 +1020,39 @@
       `;
     }
     
-    // Narratives section - only show if narrative exists in backend
+    // Narratives section - OPTIMIZED: Start fetching in parallel early (non-blocking)
+    let narrativePromise = null;
     if (preferences.showNarratives && ai_narrative_name) {
-      try {
-        const apiBaseUrl = await window.ragardConfig?.getApiBaseUrl() || 'http://localhost:8000';
-        const narrativesResponse = await fetch(`${apiBaseUrl}/api/narratives?timeframe=24h`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          mode: 'cors',
-          credentials: 'omit'
-        });
-        
-        if (narrativesResponse.ok) {
-          const allNarratives = await narrativesResponse.json();
-          const matchingNarrative = allNarratives.find(n => 
-            n.name && n.name.toLowerCase() === ai_narrative_name.toLowerCase()
-          );
+      // Start fetching narratives early, don't wait for it
+      narrativePromise = (async () => {
+        try {
+          const apiBaseUrl = await window.ragardConfig?.getApiBaseUrl() || 'http://localhost:8000';
+          const narrativesResponse = await fetch(`${apiBaseUrl}/api/narratives?timeframe=24h`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            mode: 'cors',
+            credentials: 'omit'
+          });
           
-          if (matchingNarrative) {
-            html += `
-              <div class="ragard-section">
-                <div class="ragard-section-title">Narratives in this content</div>
-                <div style="padding: 8px; margin-bottom: 8px; background: rgba(11, 17, 32, 0.6); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px;">
-                  <div style="font-weight: 600; font-size: 13px; color: #e5e7eb; margin-bottom: 4px;">${matchingNarrative.name}</div>
-                  ${matchingNarrative.description ? `<div style="font-size: 11px; color: #9ca3af; margin-bottom: 6px;">${matchingNarrative.description}</div>` : ''}
-                  <button class="ragard-narrative-action" data-narrative-id="${matchingNarrative.id}" data-narrative-name="${matchingNarrative.name}" style="padding: 4px 8px; background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 4px; cursor: pointer; font-size: 10px; margin-top: 6px;">
-                    View in Ragard
-                  </button>
-                </div>
-              </div>
-            `;
+          if (narrativesResponse.ok) {
+            const allNarratives = await narrativesResponse.json();
+            return allNarratives.find(n => 
+              n.name && n.name.toLowerCase() === ai_narrative_name.toLowerCase()
+            );
           }
+        } catch (e) {
+          // Silently fail
         }
-      } catch (e) {
-        // Silently fail
-      }
+        return null;
+      })();
     }
+    
+    // Continue with HTML generation while narrative fetch happens in background
+    // (narrative will be inserted later when ready)
 
     // AI Take section
     html += `
       <div class="ragard-section">
-        <div class="ragard-section-title">AI Take</div>
     `;
 
     if (ai_narrative_name) {
@@ -1090,19 +1091,39 @@
     
     html += `</div>`; // Close AI Take section
     
+    // Narratives section - insert here after narrative fetch completes
+    if (narrativePromise) {
+      try {
+        const matchingNarrative = await narrativePromise;
+        if (matchingNarrative) {
+          html += `
+            <div class="ragard-section">
+              <div class="ragard-section-title">Narratives in this content</div>
+              <div style="padding: 8px; margin-bottom: 8px; background: rgba(11, 17, 32, 0.6); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px;">
+                <div style="font-weight: 600; font-size: 13px; color: #e5e7eb; margin-bottom: 4px;">${matchingNarrative.name}</div>
+                ${matchingNarrative.description ? `<div style="font-size: 11px; color: #9ca3af; margin-bottom: 6px;">${matchingNarrative.description}</div>` : ''}
+                <button class="ragard-narrative-action" data-narrative-id="${matchingNarrative.id}" data-narrative-name="${matchingNarrative.name}" style="padding: 4px 8px; background: rgba(34, 211, 238, 0.1); color: #22D3EE; border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 4px; cursor: pointer; font-size: 10px; margin-top: 6px;">
+                  View in Ragard
+                </button>
+              </div>
+            </div>
+          `;
+        }
+      } catch (e) {
+        // Silently fail - narrative fetch failed, continue without it
+      }
+    }
+    
     // Action buttons section
     const primaryTicker = tickers.length > 0 ? (tickers[0].symbol || tickers[0]) : null;
     html += `
       <div class="ragard-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-bottom: 0;">
+        <button id="ragard-full-analysis-btn" style="width: 100%; padding: 12px 16px; border-radius: 999px; border: none; background: #22D3EE; color: #020617; font-weight: 600; cursor: pointer; font-size: 13px; box-shadow: 0 2px 8px rgba(34, 211, 238, 0.3); transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+          Full Analysis in Ragard
+        </button>
     `;
     
     if (primaryTicker) {
-      html += `
-        <button id="ragard-full-analysis-btn" style="width: 100%; padding: 12px 16px; border-radius: 999px; border: none; background: #22c55e; color: #020617; font-weight: 600; cursor: pointer; font-size: 13px; box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3); transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-          Full Analysis in Ragard
-        </button>
-      `;
-      
       html += `
         <button id="ragard-save-page-btn" style="width: 100%; padding: 10px 16px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.3); background: rgba(148, 163, 184, 0.1); color: #9ca3af; font-weight: 600; cursor: pointer; font-size: 12px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
           Save this page under ${primaryTicker}
@@ -1135,22 +1156,32 @@
         const action = btn.getAttribute('data-action');
         
         if (action === 'watchlist') {
+          // Prevent multiple clicks
+          if (btn.disabled) return;
+          btn.disabled = true;
+          
           // Check auth status first (force refresh)
           await checkAuthStatus(true);
           if (!authState.isLoggedIn) {
-            alert('Please log into Ragard to use watchlists.');
+            btn.disabled = false;
+            alert('Sign in at ragardai.com — the sidebar will then use the same account for watchlists and saved analyses.');
             return;
           }
           
           const inWatchlist = btn.getAttribute('data-in-watchlist') === 'true';
+          const normalizedTicker = ticker.toUpperCase().trim();
+          
           try {
             const authToken = await getAuthToken();
             if (!authToken) {
-              alert('Please log into Ragard to use watchlists.');
+              btn.disabled = false;
+              alert('Sign in at ragardai.com — the sidebar will then use the same account for watchlists and saved analyses.');
               return;
             }
             
             const apiBaseUrl = await window.ragardConfig?.getApiBaseUrl() || 'http://localhost:8000';
+            
+            // Get user's watchlists
             const watchlistResponse = await fetch(`${apiBaseUrl}/api/watchlists`, {
               headers: {
                 'Authorization': `Bearer ${authToken}`,
@@ -1160,73 +1191,136 @@
               credentials: 'omit'
             });
             
-            if (watchlistResponse.ok) {
-              const watchlists = await watchlistResponse.json();
-              // Use first watchlist, or create one if none exist
-              let watchlistId = null;
-              if (watchlists.length > 0) {
-                watchlistId = watchlists[0].id;
-              } else {
-                // Create a default watchlist if none exists
-                const createResponse = await fetch(`${apiBaseUrl}/api/watchlists`, {
+            if (!watchlistResponse.ok) {
+              throw new Error('Failed to fetch watchlists');
+            }
+            
+            const watchlists = await watchlistResponse.json();
+            
+            if (watchlists.length === 0) {
+              btn.disabled = false;
+              alert('Please create a watchlist first. Go to the Ragard website to create one.');
+              return;
+            }
+            
+            if (inWatchlist) {
+              // Remove from first watchlist the ticker is in
+              const watchlistId = watchlists[0].id;
+              // Remove from watchlist - find the item first
+              const itemsResponse = await fetch(`${apiBaseUrl}/api/watchlists/${watchlistId}/items`, {
+                headers: {
+                  'Authorization': `Bearer ${authToken}`,
+                  'Content-Type': 'application/json'
+                },
+                mode: 'cors',
+                credentials: 'omit'
+              });
+              
+              if (itemsResponse.ok) {
+                const items = await itemsResponse.json();
+                const item = items.find(i => i.ticker === normalizedTicker);
+                if (item) {
+                  const deleteResponse = await fetch(`${apiBaseUrl}/api/watchlists/${watchlistId}/items/${item.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                      'Authorization': `Bearer ${authToken}`,
+                      'Content-Type': 'application/json'
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
+                  });
+                  
+                  if (!deleteResponse.ok) {
+                    const errorData = await deleteResponse.json().catch(() => ({}));
+                    throw new Error(errorData.detail || 'Failed to remove from watchlist');
+                  }
+                }
+              }
+            } else {
+              // Add to watchlist: show menu to pick which watchlist
+              const addToWatchlistId = (watchlistId) => {
+                return fetch(`${apiBaseUrl}/api/watchlists/${watchlistId}/items`, {
                   method: 'POST',
                   headers: {
                     'Authorization': `Bearer ${authToken}`,
                     'Content-Type': 'application/json'
                   },
-                  body: JSON.stringify({ name: 'My Watchlist' }),
+                  body: JSON.stringify({ ticker: normalizedTicker }),
                   mode: 'cors',
                   credentials: 'omit'
                 });
-                if (createResponse.ok) {
-                  const newWatchlist = await createResponse.json();
-                  watchlistId = newWatchlist.id;
-                }
-              }
-              
-              if (watchlistId) {
-                if (inWatchlist) {
-                  const itemsResponse = await fetch(`${apiBaseUrl}/api/watchlists/${watchlistId}/items`, {
-                    headers: {
-                      'Authorization': `Bearer ${authToken}`,
-                      'Content-Type': 'application/json'
-                    },
-                    mode: 'cors',
-                    credentials: 'omit'
-                  });
-                  if (itemsResponse.ok) {
-                    const items = await itemsResponse.json();
-                    const item = items.find(i => i.ticker === ticker.toUpperCase());
-                    if (item) {
-                      await fetch(`${apiBaseUrl}/api/watchlists/${watchlistId}/items/${item.id}`, {
-                        method: 'DELETE',
-                        headers: {
-                          'Authorization': `Bearer ${authToken}`,
-                          'Content-Type': 'application/json'
-                        },
-                        mode: 'cors',
-                        credentials: 'omit'
-                      });
+              };
+              const watchlistMenu = document.createElement('div');
+              watchlistMenu.className = 'ragard-watchlist-menu';
+              watchlistMenu.setAttribute('role', 'menu');
+              const rect = btn.getBoundingClientRect();
+              watchlistMenu.style.cssText = `
+                position: fixed;
+                left: ${rect.left}px;
+                top: ${rect.bottom + 4}px;
+                min-width: ${Math.max(rect.width, 140)}px;
+                background: rgba(15, 23, 42, 0.98);
+                border: 1px solid rgba(148, 163, 184, 0.3);
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+                z-index: 10000;
+                padding: 4px 0;
+                font-size: 12px;
+                color: #e5e7eb;
+              `;
+              watchlistMenu.innerHTML = '<div style="padding: 6px 10px; color: #9ca3af; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Add to watchlist</div>' +
+                watchlists.map(w => `
+                  <div role="menuitem" data-watchlist-id="${w.id}" style="padding: 8px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" onmouseover="this.style.background='rgba(34, 211, 238, 0.15)'" onmouseout="this.style.background='transparent'">
+                    ${(w.name || w.title || 'Unnamed list').replace(/</g, '&lt;')}
+                  </div>
+                `).join('');
+              const closeMenu = () => {
+                watchlistMenu.remove();
+                document.removeEventListener('click', closeMenu);
+                document.removeEventListener('keydown', onKey);
+                btn.disabled = false;
+              };
+              const onKey = (e) => {
+                if (e.key === 'Escape') closeMenu();
+              };
+              watchlistMenu.querySelectorAll('[role="menuitem"]').forEach(itemEl => {
+                itemEl.addEventListener('click', async (e) => {
+                  e.stopPropagation();
+                  const wlId = itemEl.getAttribute('data-watchlist-id');
+                  closeMenu();
+                  try {
+                    const addResponse = await addToWatchlistId(wlId);
+                    if (!addResponse.ok) {
+                      const errorData = await addResponse.json().catch(() => ({}));
+                      const errorMsg = errorData.detail || 'Failed to add to watchlist';
+                      if (!errorMsg.includes('already') && !errorMsg.includes('duplicate') && addResponse.status !== 409) {
+                        throw new Error(errorMsg);
+                      }
                     }
+                    await renderAnalysis(data);
+                  } catch (err) {
+                    console.error('[Ragard] Error adding to watchlist:', err);
+                    alert('Error updating watchlist: ' + (err.message || 'Unknown error'));
+                  } finally {
+                    btn.disabled = false;
                   }
-                } else {
-                  await fetch(`${apiBaseUrl}/api/watchlists/${watchlistId}/items`, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${authToken}`,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ ticker: ticker.toUpperCase() }),
-                    mode: 'cors',
-                    credentials: 'omit'
-                  });
-                }
-                // Re-render to update watchlist status
-                await renderAnalysis(data);
-              }
+                });
+              });
+              watchlistMenu.addEventListener('click', (e) => e.stopPropagation());
+              document.body.appendChild(watchlistMenu);
+              document.addEventListener('click', closeMenu);
+              document.addEventListener('keydown', onKey);
+              // Don't re-render here; menu click will trigger add then render. Don't set btn.disabled = false here, menu close does it.
+              return;
             }
+            
+            // Re-render to update watchlist status (for remove path)
+            await renderAnalysis(data);
           } catch (error) {
+            console.error('[Ragard] Error updating watchlist:', error);
             alert('Error updating watchlist: ' + (error.message || 'Unknown error'));
+          } finally {
+            btn.disabled = false;
           }
         }
       });
@@ -1234,35 +1328,56 @@
     
     // Narrative actions
     contentEl.querySelectorAll('.ragard-narrative-action').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const narrativeId = btn.getAttribute('data-narrative-id');
         const narrativeName = btn.getAttribute('data-narrative-name');
         const narrativeParam = narrativeId || encodeURIComponent(narrativeName);
+        const webAppUrl = await (window.ragardConfig?.getWebAppBaseUrl() || Promise.resolve('http://localhost:3000'));
         chrome.runtime.sendMessage({
           type: 'OPEN_OR_FOCUS_RAGARD',
-          url: `${await window.ragardConfig?.getWebAppBaseUrl() || 'http://localhost:3000'}/narratives/${narrativeParam}`
+          url: `${webAppUrl}/narratives/${narrativeParam}`
         });
       });
     });
     
-    // Full Analysis button
-    const fullAnalysisBtn = document.getElementById('ragard-full-analysis-btn');
-    if (fullAnalysisBtn && primaryTicker) {
-      fullAnalysisBtn.addEventListener('click', (e) => {
+    // Ticker "View profile" buttons — open stock profile on Ragard
+    contentEl.querySelectorAll('.ragard-ticker-profile-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const primarySymbol = typeof primaryTicker === 'string' ? primaryTicker : primaryTicker.symbol;
-        const authorParam = author ? `?author=${encodeURIComponent(author.replace('u/', '').trim())}` : '';
-        const webAppUrl = await window.ragardConfig?.getWebAppBaseUrl() || 'http://localhost:3000';
-        const ragardUrl = `${webAppUrl}/stocks/${encodeURIComponent(primarySymbol)}${authorParam}`;
-        chrome.runtime.sendMessage({
-          type: 'OPEN_OR_FOCUS_RAGARD',
-          url: ragardUrl
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            window.open(ragardUrl, '_blank');
-          }
+        const symbol = btn.getAttribute('data-ticker');
+        if (!symbol) return;
+        const webAppUrl = await (window.ragardConfig?.getWebAppBaseUrl() || Promise.resolve('http://localhost:3000'));
+        const authorParam = author ? `?author=${encodeURIComponent(String(author).replace('u/', '').trim())}` : '';
+        const url = `${webAppUrl}/stocks/${encodeURIComponent(symbol.toUpperCase())}${authorParam}`;
+        chrome.runtime.sendMessage({ type: 'OPEN_OR_FOCUS_RAGARD', url }, () => {
+          if (chrome.runtime.lastError) window.open(url, '_blank');
         });
+      });
+    });
+
+    // Full Analysis button — open full post analysis page (deeper dive) with current analysis data
+    const fullAnalysisBtn = document.getElementById('ragard-full-analysis-btn');
+    if (fullAnalysisBtn) {
+      fullAnalysisBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const payload = currentAnalysisData;
+        if (!payload || !payload.ok) {
+          alert('No analysis data to show. Run analysis first.');
+          return;
+        }
+        const webAppUrl = await (window.ragardConfig?.getWebAppBaseUrl() || Promise.resolve('http://localhost:3000'));
+        try {
+          const json = JSON.stringify(payload);
+          const encoded = btoa(unescape(encodeURIComponent(json)));
+          const url = `${webAppUrl}/extension/analysis#${encoded}`;
+          chrome.runtime.sendMessage({ type: 'OPEN_OR_FOCUS_RAGARD', url }, () => {
+            if (chrome.runtime.lastError) window.open(url, '_blank');
+          });
+        } catch (err) {
+          console.warn('[Ragard] Full analysis payload too large or encoding failed:', err);
+          alert('Analysis data is too large to open in browser. Try with fewer tickers or a shorter page.');
+        }
       });
     }
     
@@ -1423,8 +1538,8 @@
           } else {
             savePageBtn.textContent = '✓ Saved locally';
           }
-          savePageBtn.style.background = 'rgba(34, 197, 94, 0.2)';
-          savePageBtn.style.color = '#22c55e';
+          savePageBtn.style.background = 'rgba(34, 211, 238, 0.2)';
+          savePageBtn.style.color = '#22D3EE';
           
           // Reset button after 2 seconds
           setTimeout(() => {
@@ -1470,22 +1585,38 @@
   // Reset panel to initial state
   function resetPanelToInitial() {
     const contentEl = document.getElementById('ragard-panel-content');
-    if (!contentEl) return;
+    if (!contentEl) {
+      console.error('[RAGARD] Content container not found in resetPanelToInitial');
+      return;
+    }
     
+    console.log('[RAGARD] Resetting panel to initial state');
+    const signInHint = !authState.isLoggedIn
+      ? '<div style="font-size: 10px; color: #6b7280; margin-top: 12px; line-height: 1.4;">Sign in at <a href="https://ragardai.com" target="_blank" rel="noopener" style="color: #22D3EE;">ragardai.com</a> to use watchlists &amp; sync.</div>'
+      : '';
     contentEl.innerHTML = `
       <div style="color: #9ca3af; font-size: 12px; line-height: 1.5; text-align: center; padding: 20px 0;">
         <div style="margin-bottom: 12px;">Click the button below to analyze this page.</div>
-        <button id="ragard-analyze-btn" style="width: 100%; padding: 12px 16px; border-radius: 999px; border: none; background: #22c55e; color: #020617; font-weight: 600; cursor: pointer; font-size: 13px; margin-top: 8px; box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3); transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
+        <button id="ragard-analyze-btn" style="width: 100%; padding: 12px 16px; border-radius: 999px; border: none; background: #22D3EE; color: #020617; font-weight: 600; cursor: pointer; font-size: 13px; margin-top: 8px; box-shadow: 0 2px 8px rgba(34, 211, 238, 0.3); transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
           Analyze Page
         </button>
+        ${signInHint}
       </div>
     `;
     
+    // Event delegation is already set up in init(), but attach directly as well for immediate response
     const analyzeBtn = document.getElementById('ragard-analyze-btn');
     if (analyzeBtn) {
-      analyzeBtn.addEventListener('click', () => {
+      console.log('[RAGARD] Found analyze button after reset, attaching direct listener');
+      analyzeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[RAGARD] Analyze button clicked (from resetPanelToInitial)');
         requestAnalysis();
-      });
+        return false;
+      }, true); // Use capture phase
+    } else {
+      console.error('[RAGARD] Analyze button not found after reset!');
     }
   }
 
@@ -1518,6 +1649,12 @@
   async function requestAnalysis() {
     // CRITICAL DEBUG: Confirm this function is called
     console.log("[RAGARD] requestAnalysis called - analyze button clicked");
+    
+    // Prevent duplicate calls
+    if (isAnalyzing) {
+      console.log('[RAGARD] Analysis already in progress, ignoring duplicate request');
+      return;
+    }
     
     // Generate new analysis ID
     const analysisId = ++nextAnalysisId;
@@ -1632,8 +1769,8 @@
             target: { tabId: tab.id },
             files: ['contentScript.js']
           });
-          // Wait a bit for script to initialize
-          await new Promise(resolve => setTimeout(resolve, 300));
+          // Wait a bit for script to initialize (reduced from 300ms to 100ms for faster startup)
+          await new Promise(resolve => setTimeout(resolve, 100));
           contentScriptReady = true;
         } catch (injectErr) {
           console.error('[Ragard] Could not inject content script:', injectErr);
@@ -1644,6 +1781,7 @@
       }
       
       // Poll storage periodically to check if result arrived (in case callback doesn't fire)
+      // Faster polling (250ms instead of 500ms) for quicker response
       // Declare outside so it's accessible in callback
       let storageCheckInterval = setInterval(() => {
         // Check if this analysis is still current
@@ -1720,7 +1858,7 @@
             }
           }
         });
-      }, 500); // Check every 500ms
+      }, 250); // Check every 250ms (faster polling for quicker response)
       
       // Set up extended timeout warning (60 seconds) - show message but keep polling
       let timeoutWarningShown = false;
@@ -1988,7 +2126,7 @@
       <div class="ragard-error">
         <div style="font-weight: 600; margin-bottom: 4px;">Error</div>
         <div style="font-size: 12px;">${message}</div>
-        <button id="ragard-retry-btn" style="width: 100%; padding: 8px 12px; margin-top: 12px; border-radius: 999px; border: none; background: #22c55e; color: #020617; font-weight: 600; cursor: pointer; font-size: 12px;">
+        <button id="ragard-retry-btn" style="width: 100%; padding: 8px 12px; margin-top: 12px; border-radius: 999px; border: none; background: #22D3EE; color: #020617; font-weight: 600; cursor: pointer; font-size: 12px;">
           Retry
         </button>
       </div>
@@ -2022,18 +2160,6 @@
           </div>
           
           <div style="margin-bottom: 16px;">
-            <div style="font-size: 12px; color: #9ca3af; margin-bottom: 8px; font-weight: 600;">API Configuration</div>
-            <div style="margin-bottom: 8px;">
-              <label style="display: block; font-size: 11px; color: #9ca3af; margin-bottom: 4px;">API Base URL</label>
-              <input type="text" id="ragard-api-url" placeholder="http://localhost:8000" style="width: 100%; padding: 6px 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 4px; color: #e5e7eb; font-size: 11px; font-family: monospace;">
-            </div>
-            <div style="margin-bottom: 12px;">
-              <label style="display: block; font-size: 11px; color: #9ca3af; margin-bottom: 4px;">Web App Base URL</label>
-              <input type="text" id="ragard-web-app-url" placeholder="http://localhost:3000" style="width: 100%; padding: 6px 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 4px; color: #e5e7eb; font-size: 11px; font-family: monospace;">
-            </div>
-          </div>
-          
-          <div style="margin-bottom: 16px;">
             <div style="font-size: 12px; color: #9ca3af; margin-bottom: 8px;">Show sections</div>
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
               <input type="checkbox" id="ragard-show-tickers" ${preferences.showTickers ? 'checked' : ''} style="cursor: pointer;">
@@ -2053,7 +2179,7 @@
             </label>
           </div>
           
-          <button id="ragard-settings-save" style="width: 100%; padding: 10px; background: #22c55e; color: #020617; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 12px; margin-top: 12px;">
+          <button id="ragard-settings-save" style="width: 100%; padding: 10px; background: #22D3EE; color: #020617; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 12px; margin-top: 12px;">
             Save Settings
           </button>
           
@@ -2062,14 +2188,6 @@
           </button>
         </div>
       `;
-      
-      // Load current config values
-      (async () => {
-        const apiUrl = await window.ragardConfig?.getApiBaseUrl() || 'http://localhost:8000';
-        const webAppUrl = await window.ragardConfig?.getWebAppBaseUrl() || 'http://localhost:3000';
-        document.getElementById('ragard-api-url').value = apiUrl;
-        document.getElementById('ragard-web-app-url').value = webAppUrl;
-      })();
       
       // Save button
       document.getElementById('ragard-settings-save').addEventListener('click', async () => {
@@ -2088,16 +2206,6 @@
           preferences.showHistory = document.getElementById('ragard-show-history').checked;
           preferences.showSeenOften = document.getElementById('ragard-show-seen-often').checked;
           
-          // Save API URLs
-          const apiUrl = document.getElementById('ragard-api-url').value.trim();
-          const webAppUrl = document.getElementById('ragard-web-app-url').value.trim();
-          if (apiUrl && window.ragardConfig) {
-            await window.ragardConfig.setApiBaseUrl(apiUrl);
-          }
-          if (webAppUrl && window.ragardConfig) {
-            await window.ragardConfig.setWebAppBaseUrl(webAppUrl);
-          }
-          
           chrome.storage.local.set({ ragard_preferences: preferences }, () => {
             resetPanelToInitial();
           });
@@ -2113,6 +2221,10 @@
 
   function init() {
     console.log('[Ragard] Side panel loaded');
+    
+    // Expose requestAnalysis globally for onclick fallback
+    window.ragardRequestAnalysis = requestAnalysis;
+    console.log('[RAGARD] Exposed requestAnalysis to window.ragardRequestAnalysis');
     
     // Check auth status on init (non-blocking, force refresh to get latest) - SEPARATE from analyze logic
     // This runs independently and does NOT affect the analyze button
@@ -2136,6 +2248,18 @@
         console.warn('[Ragard] Periodic auth check failed:', err);
       });
     }, 30000); // 30 seconds
+
+    // When token is synced from the website (user logged in on ragardai.com), refresh auth and UI
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'local') return;
+      if (changes.ragardToken && changes.ragardToken.newValue) {
+        checkAuthStatus(true).then(() => {
+          const contentEl = document.getElementById('ragard-panel-content');
+          const isInitialState = contentEl && contentEl.querySelector('#ragard-analyze-btn') && !contentEl.querySelector('.ragard-section');
+          if (isInitialState) resetPanelToInitial();
+        }).catch(() => {});
+      }
+    });
     
     // Settings button
     const settingsBtn = document.getElementById('ragard-settings-btn');
@@ -2146,17 +2270,49 @@
       });
     }
     
-    // Analyze button - DO NOT MODIFY THIS HANDLER
-    const analyzeBtn = document.getElementById('ragard-analyze-btn');
-    if (analyzeBtn) {
-      analyzeBtn.addEventListener('click', () => {
-        console.log('[RAGARD] Analyze button clicked in init()');
-        requestAnalysis();
-      });
+    // Use event delegation on the content container for the analyze button
+    // This ensures the button works even if it's dynamically created/replaced
+    const contentEl = document.getElementById('ragard-panel-content');
+    if (contentEl) {
+      console.log('[RAGARD] Setting up event delegation on content container');
+      // Remove any existing listener to avoid duplicates
+      const clickHandler = (e) => {
+        // Check if the clicked element is the analyze button or inside it
+        const clickedElement = e.target;
+        const analyzeBtn = clickedElement.id === 'ragard-analyze-btn' 
+          ? clickedElement 
+          : (clickedElement.closest ? clickedElement.closest('#ragard-analyze-btn') : null);
+        
+        if (analyzeBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('[RAGARD] Analyze button clicked (via event delegation)', analyzeBtn);
+          requestAnalysis();
+          return false;
+        }
+      };
+      contentEl.addEventListener('click', clickHandler, true); // Use capture phase
+    } else {
+      console.error('[RAGARD] Content container not found!');
     }
     
-    // Restore stored analysis if available (universal panel - shows last analysis regardless of active tab)
-    // But only if there's no analysis in progress
+    // Also attach directly to existing button if it exists (for immediate clicks)
+    const analyzeBtn = document.getElementById('ragard-analyze-btn');
+    if (analyzeBtn) {
+      console.log('[RAGARD] Found analyze button, attaching direct listener');
+      analyzeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[RAGARD] Analyze button clicked (direct listener)');
+        requestAnalysis();
+        return false;
+      }, true); // Use capture phase
+    } else {
+      console.warn('[RAGARD] Analyze button not found in initial HTML');
+    }
+    
+    // Restore stored analysis if available - but only if URL matches current tab
+    // This prevents old analysis from appearing when you're on a different page
     chrome.storage.local.get(['ragard_current_analysis', 'ragard_analysis_in_progress'], (result) => {
       // If there's an analysis in progress, show loading instead of old analysis
       if (result.ragard_analysis_in_progress) {
@@ -2165,11 +2321,26 @@
       }
       
       if (result.ragard_current_analysis && result.ragard_current_analysis.data) {
+        // Check if stored analysis URL matches current active tab URL
         (async () => {
           try {
-            await renderAnalysis(result.ragard_current_analysis.data);
+            // Get current active tab URL
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            const currentTabUrl = tabs[0]?.url || null;
+            const storedAnalysisUrl = result.ragard_current_analysis.url || null;
+            
+            // Only restore if URLs match (user is on the same page that was analyzed)
+            if (currentTabUrl && storedAnalysisUrl && currentTabUrl === storedAnalysisUrl) {
+              console.log('[RAGARD] Restoring stored analysis for matching URL:', currentTabUrl);
+              await renderAnalysis(result.ragard_current_analysis.data);
+            } else {
+              // URLs don't match - don't restore old analysis, show initial state instead
+              console.log('[RAGARD] Stored analysis URL does not match current tab, not restoring');
+              console.log('[RAGARD] Current tab:', currentTabUrl, 'Stored:', storedAnalysisUrl);
+              resetPanelToInitial();
+            }
           } catch (err) {
-            console.warn('[Ragard] Error rendering stored analysis:', err);
+            console.warn('[Ragard] Error checking URLs or rendering stored analysis:', err);
             resetPanelToInitial();
           }
         })();

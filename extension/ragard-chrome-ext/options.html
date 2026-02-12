@@ -115,38 +115,17 @@
       gap: 8px;
       margin-top: 16px;
     }
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: #22c55e;
+    }
   </style>
 </head>
 <body>
   <h1>Ragard Extension Settings</h1>
-  <p class="subtitle">Configure API and Web App URLs</p>
-
-  <div class="section">
-    <div class="section-title">API Configuration</div>
-    
-    <div class="form-group">
-      <label for="api-base-url">API Base URL</label>
-      <input type="text" id="api-base-url" placeholder="http://localhost:8000">
-      <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
-        The backend API URL (e.g., http://localhost:8000 or https://api.yourdomain.com)
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label for="web-app-base-url">Web App Base URL</label>
-      <input type="text" id="web-app-base-url" placeholder="http://localhost:3000">
-      <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
-        The frontend web app URL (e.g., http://localhost:3000 or https://yourdomain.com)
-      </div>
-    </div>
-
-    <div class="button-group">
-      <button class="btn-primary" id="test-connection">Test Connection</button>
-      <button class="btn-secondary" id="save-settings">Save Settings</button>
-    </div>
-
-    <div id="status" class="status"></div>
-  </div>
+  <p class="subtitle">Extension preferences and options</p>
 
   <script src="config.js"></script>
   <script src="options.js"></script>

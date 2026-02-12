@@ -25,18 +25,19 @@ async def get_trending(
 ):
     """
     Get list of trending tickers derived from Reddit activity and market movement.
+    Always returns up to 20 analyzed tickers. Frontend can show top 10 or all 20.
     
     Args:
         timeframe: Timeframe key (24h, 7d, 30d). Defaults to "24h".
     
     Returns:
-        List of Ticker objects sorted by trending score
+        List of Ticker objects sorted by trending score (up to 20)
     """
     try:
-        # Use real trending builder to respect timeframe
-        # Add timeout to prevent hanging (60 seconds max)
+        # Always analyze and return 20 tickers (backend analyzes up to 20 anyway)
+        # Frontend can show top 10 or all 20 without needing another API call
         tickers = await asyncio.wait_for(
-            trending_service.build_trending_tickers(timeframe, max_symbols=10),
+            trending_service.build_trending_tickers(timeframe, max_symbols=20),
             timeout=60.0
         )
         return tickers

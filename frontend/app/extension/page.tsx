@@ -5,8 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import Card from '@/components/Card'
 
-// TODO: Replace with actual Chrome Web Store URL when extension is published
-const CHROME_EXTENSION_URL = "https://chromewebstore.google.com/detail/ragard-extension-placeholder"
+const CHROME_EXTENSION_URL = "https://chromewebstore.google.com/detail/ragard-sidebar-extension/mlenmeikgmnlonpbflbbhpicjdkddigo"
 
 // Extension Demo Component
 function ExtensionDemo() {
@@ -69,197 +68,205 @@ function ExtensionDemo() {
           </div>
         </div>
 
-        {/* Reddit Post Content */}
-        <div className="flex-1 p-6 bg-slate-900 overflow-hidden">
-          <div className="max-w-2xl mx-auto space-y-4 h-full">
-            {/* Post Header */}
-            <div className="flex items-start gap-2 mb-3">
-              <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center overflow-hidden p-1">
-                <img 
-                  src="https://www.redditstatic.com/desktop2x/img/id-cards/snoo-avatar.svg" 
-                  alt="Reddit Snoo" 
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    // Fallback if image doesn't load
-                    const target = e.target as HTMLImageElement
-                    target.style.display = 'none'
-                    const parent = target.parentElement
-                    if (parent) {
-                      parent.innerHTML = `
-                        <div class="w-full h-full bg-white rounded-full flex items-center justify-center">
-                          <div class="w-4 h-4 bg-orange-500 rounded-full"></div>
-                        </div>
-                      `
-                    }
-                  }}
-                />
-              </div>
-              <div className="flex-1">
-                <div className="text-xs font-medium text-slate-300 mb-0.5">r/stocks</div>
-                <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                  <span className="text-slate-300 hover:text-slate-200">u/stocktrader123</span>
-                  <span>•</span>
-                  <span>2 hours ago</span>
+        {/* Main Content Area - Split View */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Reddit Post Content - Left Side */}
+          <div className="flex-1 p-6 bg-slate-900 overflow-hidden">
+            <div className="max-w-2xl mx-auto space-y-4 h-full">
+              {/* Post Header */}
+              <div className="flex items-start gap-2 mb-3">
+                <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center overflow-hidden p-1">
+                  <img 
+                    src="https://www.redditstatic.com/desktop2x/img/id-cards/snoo-avatar.svg" 
+                    alt="Reddit Snoo" 
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement
+                      target.style.display = 'none'
+                      const parent = target.parentElement
+                      if (parent) {
+                        parent.innerHTML = `
+                          <div class="w-full h-full bg-white rounded-full flex items-center justify-center">
+                            <div class="w-4 h-4 bg-orange-500 rounded-full"></div>
+                          </div>
+                        `
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs font-medium text-slate-300 mb-0.5">r/stocks</div>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                    <span className="text-slate-300 hover:text-slate-200">u/stocktrader123</span>
+                    <span>•</span>
+                    <span>2 hours ago</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            {/* Post Title */}
-            <h2 className="text-lg font-semibold text-slate-200 mb-3 leading-tight">
-              What are your thoughts on TSLA's recent earnings?
-            </h2>
-            
-            {/* Post Body */}
-            <div className="space-y-2.5 mb-4">
-              <div className="h-3.5 bg-slate-700/70 rounded w-full"></div>
-              <div className="h-3.5 bg-slate-700/70 rounded w-5/6"></div>
-              <div className="h-3.5 bg-slate-700/70 rounded w-4/5"></div>
-              <div className="h-3.5 bg-slate-700/70 rounded w-full"></div>
-            </div>
-            
-            {/* Post Actions */}
-            <div className="flex items-center gap-4 pt-2 border-t border-slate-800">
-              <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
-              <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
-              <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
-            </div>
-
-            {/* Post Actions */}
-            <div className="flex items-center gap-4 pt-2">
-              <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
-              <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
-              <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
-            </div>
-
-            {/* Comments Section */}
-            <div className="pt-2 border-t border-slate-800 space-y-3">
-              <div className="h-4 w-32 bg-slate-700/50 rounded"></div>
               
-              {/* Comment 1 */}
-              <div className="space-y-1.5 pl-4 border-l-2 border-slate-800">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-slate-700"></div>
-                  <div className="h-2.5 w-20 bg-slate-700/50 rounded"></div>
-                </div>
-                <div className="space-y-1">
-                  <div className="h-3 bg-slate-700/60 rounded w-full"></div>
-                  <div className="h-3 bg-slate-700/60 rounded w-5/6"></div>
+              {/* Post Title */}
+              <h2 className="text-lg font-semibold text-slate-200 mb-3 leading-tight">
+                What are your thoughts on TSLA's recent earnings?
+              </h2>
+              
+              {/* Post Body */}
+              <div className="space-y-2.5 mb-4">
+                <div className="h-3.5 bg-slate-700/70 rounded w-full"></div>
+                <div className="h-3.5 bg-slate-700/70 rounded w-5/6"></div>
+                <div className="h-3.5 bg-slate-700/70 rounded w-4/5"></div>
+                <div className="h-3.5 bg-slate-700/70 rounded w-full"></div>
+              </div>
+              
+              {/* Post Actions */}
+              <div className="flex items-center gap-4 pt-2 border-t border-slate-800">
+                <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
+                <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
+                <div className="h-4 w-16 bg-slate-700/50 rounded"></div>
+              </div>
+
+              {/* Comments Section */}
+              <div className="pt-2 border-t border-slate-800 space-y-3">
+                <div className="h-4 w-32 bg-slate-700/50 rounded"></div>
+                
+                {/* Comment 1 */}
+                <div className="space-y-1.5 pl-4 border-l-2 border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-slate-700"></div>
+                    <div className="h-2.5 w-20 bg-slate-700/50 rounded"></div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="h-3 bg-slate-700/60 rounded w-full"></div>
+                    <div className="h-3 bg-slate-700/60 rounded w-5/6"></div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Extension Popup */}
-      <div className={`absolute top-12 right-4 transition-all duration-500 ease-out pointer-events-none ${
-        stage === 'idle' || stage === 'clicking' || stage === 'analyzing' || stage === 'showing'
-          ? 'opacity-100 translate-y-0'
-          : 'opacity-0 -translate-y-2'
-      }`}>
-        <div className="bg-ragard-surface border border-slate-800 rounded-lg shadow-2xl overflow-hidden w-52">
-          {/* Header */}
-          <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-800 bg-ragard-surfaceAlt/30">
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-semibold text-ragard-textPrimary">Ragard AI</span>
-              <span className="px-1 py-0.5 bg-ragard-success text-ragard-background text-[7px] font-bold rounded">BETA</span>
+          {/* Sidebar Panel - Right Side */}
+          <div className="w-52 bg-[#020617] border-l border-slate-800 flex flex-col">
+            {/* Sidebar Header */}
+            <div className="h-10 flex items-center justify-between px-3 border-b border-slate-800/50 bg-[#0f172a]/50 flex-shrink-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-xs text-ragard-textPrimary">Ragard AI</span>
+                <span className="text-[9px] px-1 py-0.5 bg-ragard-accent/20 rounded text-ragard-accent">BETA</span>
+              </div>
+              <button className="text-ragard-textSecondary text-xs w-5 h-5 flex items-center justify-center hover:text-ragard-textPrimary transition-colors">
+                ⚙️
+              </button>
             </div>
-            <div className="w-2.5 h-2.5 text-pink-400">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-                <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
-              </svg>
-            </div>
-          </div>
 
-          {/* Content */}
-          <div className="p-2.5">
-            {stage === 'idle' ? (
-              <div className="space-y-2.5 text-center py-0.5">
-                <p className="text-[9px] text-ragard-textSecondary leading-relaxed">
-                  Click the button below to analyze this Reddit post.
-                </p>
-                <div className="w-full px-2.5 py-1.5 bg-ragard-success text-ragard-background rounded-lg font-semibold text-[10px] shadow-lg">
-                  Analyze Post
+            {/* Sidebar Content */}
+            <div className="flex-1 overflow-hidden p-3">
+              {stage === 'idle' ? (
+                <div className="text-center py-6">
+                  <p className="text-[11px] text-ragard-textSecondary mb-3 leading-relaxed">
+                    Click the button below to analyze this page.
+                  </p>
+                  <button 
+                    id="demo-analyze-btn"
+                    className="w-full px-3 py-2.5 rounded-full border-none bg-ragard-accent text-ragard-background font-semibold text-xs cursor-pointer shadow-lg transition-all hover:bg-ragard-accent/90"
+                    style={{ boxShadow: '0 2px 8px rgba(34, 211, 238, 0.3)' }}
+                  >
+                    Analyze Page
+                  </button>
                 </div>
-              </div>
-            ) : stage === 'clicking' ? (
-              <div className="space-y-2.5 text-center py-0.5">
-                <p className="text-[9px] text-ragard-textSecondary leading-relaxed">
-                  Click the button below to analyze this Reddit post.
-                </p>
-                <div className="w-full px-2.5 py-1.5 bg-ragard-success text-ragard-background rounded-lg font-semibold text-[10px] shadow-lg">
-                  Analyze Post
+              ) : stage === 'clicking' ? (
+                <div className="text-center py-6">
+                  <p className="text-[11px] text-ragard-textSecondary mb-3 leading-relaxed">
+                    Click the button below to analyze this page.
+                  </p>
+                  <button 
+                    id="demo-analyze-btn"
+                    className="w-full px-3 py-2.5 rounded-full border-none bg-ragard-accent text-ragard-background font-semibold text-xs cursor-pointer shadow-lg transition-all"
+                    style={{ 
+                      boxShadow: '0 2px 8px rgba(34, 211, 238, 0.3)',
+                      transform: 'scale(0.95)'
+                    }}
+                  >
+                    Analyze Page
+                  </button>
                 </div>
-              </div>
-            ) : stage === 'analyzing' ? (
-              <div className="flex items-center gap-2 py-4">
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-ragard-accent animate-pulse"></div>
-                  <div className="w-1.5 h-1.5 rounded-full bg-ragard-accent animate-pulse" style={{ animationDelay: '0.15s' }}></div>
-                  <div className="w-1.5 h-1.5 rounded-full bg-ragard-accent animate-pulse" style={{ animationDelay: '0.3s' }}></div>
-                </div>
-                <span className="text-[9px] text-ragard-textSecondary">Analyzing...</span>
-              </div>
-            ) : stage === 'showing' ? (
-              <div className="space-y-2.5 animate-fadeIn py-1">
-                {/* Post Info */}
-                <div className="space-y-0.5 pb-1.5 border-b border-slate-800">
-                  <div className="text-[8px] text-ragard-textSecondary">
-                    <span className="text-ragard-textPrimary font-medium">/r/stocks</span>
+              ) : stage === 'analyzing' ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <div className="flex gap-1.5 mb-2.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-ragard-accent animate-pulse"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-ragard-accent animate-pulse" style={{ animationDelay: '0.15s' }}></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-ragard-accent animate-pulse" style={{ animationDelay: '0.3s' }}></div>
                   </div>
-                  <div className="text-[8px] text-ragard-textSecondary line-clamp-1">
-                    What are your thoughts on TSLA's recent earnings?
-                  </div>
+                  <span className="text-[11px] text-ragard-textSecondary">Analyzing...</span>
                 </div>
-
-                {/* Author Score */}
-                <div className="flex items-center gap-1.5 pb-1.5 border-b border-slate-800">
-                  <div className="text-[8px] text-ragard-textSecondary">Author:</div>
-                  <div className="w-6 h-6 relative">
-                    <svg className="w-6 h-6 transform -rotate-90" viewBox="0 0 36 36">
-                      <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(34, 211, 238, 0.15)" strokeWidth="2" />
-                      <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(251, 191, 36, 1)" strokeWidth="2" strokeDasharray={`${(70 / 100) * 2 * Math.PI * 13}, ${2 * Math.PI * 13}`} strokeLinecap="round" />
-                    </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-yellow-400">70</span>
-                  </div>
-                  <span className="text-[8px] px-1 py-0.5 bg-ragard-danger/20 text-ragard-danger rounded border border-ragard-danger/30">Low Trust</span>
-                </div>
-
-                {/* Ticker */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-ragard-textPrimary">TSLA</span>
-                    <div className="w-7 h-7 relative">
-                      <svg className="w-7 h-7 transform -rotate-90" viewBox="0 0 36 36">
-                        <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(34, 211, 238, 0.15)" strokeWidth="2" />
-                        <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(251, 191, 36, 1)" strokeWidth="2" strokeDasharray={`${(62 / 100) * 2 * Math.PI * 13}, ${2 * Math.PI * 13}`} strokeLinecap="round" />
-                      </svg>
-                      <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-yellow-400">62</span>
+              ) : stage === 'showing' ? (
+                <div className="space-y-3 animate-fadeIn h-full flex flex-col">
+                  {/* Post Info */}
+                  <div className="pb-2.5 border-b border-slate-800/50">
+                    <div className="text-[9px] text-ragard-textSecondary mb-0.5">
+                      <span className="text-ragard-textPrimary font-medium">/r/stocks</span>
+                    </div>
+                    <div className="text-[11px] text-ragard-textSecondary line-clamp-2">
+                      What are your thoughts on TSLA's recent earnings?
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-[8px]">
-                    <span className="text-ragard-textSecondary">$245.30</span>
-                    <span className="text-ragard-success font-semibold">+2.45%</span>
+
+                  {/* Author Score */}
+                  <div className="pb-2.5 border-b border-slate-800/50">
+                    <div className="text-[9px] text-ragard-textSecondary mb-1.5">Author</div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-8 h-8 relative flex-shrink-0">
+                        <svg className="w-8 h-8 transform -rotate-90" viewBox="0 0 36 36">
+                          <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(34, 211, 238, 0.15)" strokeWidth="2" />
+                          <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(251, 191, 36, 1)" strokeWidth="2" strokeDasharray={`${(70 / 100) * 2 * Math.PI * 13}, ${2 * Math.PI * 13}`} strokeLinecap="round" />
+                        </svg>
+                        <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-yellow-400">70</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-medium text-ragard-textPrimary mb-0.5 truncate">u/stocktrader123</div>
+                        <span className="inline-block px-1.5 py-0.5 bg-ragard-danger/20 text-ragard-danger text-[9px] font-semibold rounded border border-ragard-danger/30">Low Trust</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ticker */}
+                  <div className="pb-2.5 border-b border-slate-800/50">
+                    <div className="text-[9px] text-ragard-textSecondary mb-1.5 uppercase tracking-wide">Tickers</div>
+                    <div className="bg-[#0b1120]/60 border border-slate-800/50 rounded-lg p-2">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold text-ragard-textPrimary">TSLA</span>
+                        <div className="w-7 h-7 relative flex-shrink-0">
+                          <svg className="w-7 h-7 transform -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(34, 211, 238, 0.15)" strokeWidth="2" />
+                            <circle cx="18" cy="18" r="13" fill="none" stroke="rgba(251, 191, 36, 1)" strokeWidth="2" strokeDasharray={`${(62 / 100) * 2 * Math.PI * 13}, ${2 * Math.PI * 13}`} strokeLinecap="round" />
+                          </svg>
+                          <span className="absolute inset-0 flex items-center justify-center text-[7px] font-bold text-yellow-400">62</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-ragard-textSecondary">$245.30</span>
+                        <span className="text-ragard-success font-semibold">+2.45%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Summary */}
+                  <div className="pb-2.5 flex-1 min-h-0">
+                    <div className="text-[9px] text-ragard-textSecondary mb-1.5 uppercase tracking-wide">AI Take</div>
+                    <p className="text-[10px] text-ragard-textSecondary leading-relaxed mb-1.5 line-clamp-3">
+                      Discussion focuses on earnings performance and market outlook for the stock. Analysis indicates positive sentiment around recent developments.
+                    </p>
+                    <span className="inline-block px-1.5 py-0.5 bg-ragard-success/20 text-ragard-success text-[9px] font-semibold rounded border border-ragard-success/30">
+                      Bullish
+                    </span>
+                  </div>
+
+                  {/* Action Button */}
+                  <div className="pt-2 border-t border-slate-800/50 mt-auto">
+                    <button className="w-full px-3 py-2.5 rounded-full border-none bg-ragard-accent text-ragard-background font-semibold text-xs cursor-pointer shadow-lg transition-all hover:bg-ragard-accent/90">
+                      Full Analysis in Ragard
+                    </button>
                   </div>
                 </div>
-
-                {/* AI Summary */}
-                <div className="space-y-1 pt-1.5 border-t border-slate-800">
-                  <div className="text-[8px] font-semibold text-ragard-textSecondary uppercase">AI Take</div>
-                  <p className="text-[8px] text-ragard-textSecondary leading-relaxed line-clamp-3">
-                    Discussion focuses on earnings performance and market outlook for the stock. Analysis indicates positive sentiment around recent developments.
-                  </p>
-                  <span className="inline-block px-1 py-0.5 bg-ragard-success/20 text-ragard-success text-[7px] font-semibold rounded border border-ragard-success/30 mt-1">
-                    Bullish
-                  </span>
-                </div>
-
-                {/* Action Button */}
-                <div className="w-full mt-2 px-2.5 py-1.5 bg-ragard-success text-ragard-background rounded text-[9px] font-semibold text-center">
-                  Full Analysis in Ragard
-                </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
@@ -267,8 +274,8 @@ function ExtensionDemo() {
       {/* Cursor Animation */}
       <div className="absolute pointer-events-none z-50"
       style={{
-        top: '140px',
-        right: '250px',
+        top: '172px',
+        right: '98px',
         opacity: 1,
         animation: isCursorAnimating ? 'cursorMoveAndClick 1.8s cubic-bezier(0.4, 0, 0.2, 1) forwards' : 'none'
       }}>

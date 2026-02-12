@@ -73,18 +73,35 @@ export async function removeWatchlistItem(
 
 /**
  * Get all items for a watchlist.
- * Note: This requires a backend endpoint GET /api/watchlists/:id/items
- * For now, items are managed locally after being added.
  */
 export async function getWatchlistItems(watchlistId: string): Promise<WatchlistItem[]> {
-  try {
-    return callRagardAPI(`/api/watchlists/${watchlistId}/items`, {
-      method: 'GET',
-    })
-  } catch (error) {
-    // If endpoint doesn't exist yet, return empty array
-    console.warn('Watchlist items endpoint not available:', error)
-    return []
-  }
+  return callRagardAPI(`/api/watchlists/${watchlistId}/items`, {
+    method: 'GET',
+  })
+}
+
+/**
+ * Update a watchlist name.
+ */
+export async function updateWatchlist(
+  watchlistId: string,
+  name: string
+): Promise<Watchlist> {
+  return callRagardAPI(`/api/watchlists/${watchlistId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  })
+}
+
+/**
+ * Check which watchlists contain a specific ticker.
+ * Returns an object with ticker and array of watchlist IDs.
+ */
+export async function getTickerWatchlistStatus(
+  ticker: string
+): Promise<{ ticker: string; watchlist_ids: string[] }> {
+  return callRagardAPI(`/api/watchlists/items/status?ticker=${encodeURIComponent(ticker)}`, {
+    method: 'GET',
+  })
 }
 

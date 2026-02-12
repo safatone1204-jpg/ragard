@@ -168,11 +168,6 @@ export default function Home() {
         </h1>
       </div>
       
-      {/* Trending section */}
-      <div>
-        <TrendingTable />
-      </div>
-      
       {/* Top Narratives Preview */}
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -239,6 +234,11 @@ export default function Home() {
             ))}
           </div>
         ) : null}
+      </div>
+      
+      {/* Trending section */}
+      <div>
+        <TrendingTable />
       </div>
       
       {/* Watchlist section below */}

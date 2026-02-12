@@ -54,15 +54,26 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // When user is logged in on Ragard website, content script sends token so sidebar uses same account
+  if (message.type === 'RAGARD_SYNC_TOKEN' && message.token) {
+    chrome.storage.local.set({ ragardToken: message.token }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn('[Ragard] Failed to store synced token:', chrome.runtime.lastError);
+      }
+    });
+    sendResponse({ ok: true });
+    return false;
+  }
+
   if (message.type === 'FIND_RAGARD_TAB') {
     // Find existing Ragard tab with matching URL pattern
     const urlPattern = message.url;
     chrome.tabs.query({}, (tabs) => {
       const ragardTabs = tabs.filter(tab => {
         if (!tab.url) return false;
-        // Check if tab URL matches web app pattern (will use config)
-        const webAppUrl = self.ragardConfig?.DEFAULT_WEB_APP_BASE_URL || 'http://localhost:3000';
-        return tab.url.includes(webAppUrl + '/stocks/') || 
+        // Check if tab URL matches Ragard web app (production or local)
+        return tab.url.includes('ragardai.com/stocks/') || 
+               tab.url.includes('localhost:3000/stocks/') ||
                tab.url.includes('127.0.0.1:3000/stocks/');
       });
       sendResponse(ragardTabs);
@@ -84,12 +95,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.tabs.query({}, (tabs) => {
       const existingRagardTab = tabs.find(tab => {
         if (!tab.url) return false;
-        // Check if tab is a Ragard tab (use config)
-        const webAppUrl = self.ragardConfig?.DEFAULT_WEB_APP_BASE_URL || 'http://localhost:3000';
-        const webAppHost = new URL(webAppUrl).hostname;
-        return tab.url.includes(webAppHost) || 
-               tab.url.includes('127.0.0.1:3000') ||
-               tab.url.includes('ragard');
+        // Check if tab is a Ragard tab (production or local)
+        return tab.url.includes('ragardai.com') || 
+               tab.url.includes('localhost:3000') ||
+               tab.url.includes('127.0.0.1:3000');
       });
       
       if (existingRagardTab) {

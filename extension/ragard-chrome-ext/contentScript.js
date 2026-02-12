@@ -522,6 +522,9 @@
     'SO', 'THAN', 'TOO', 'VERY', 'JUST', 'NOW', 'THEN', 'HERE', 'THERE'
   ]);
 
+  // Tickers that require '$' prefix to be recognized (common financial acronyms)
+  const REQUIRE_DOLLAR_PREFIX = new Set(['YOLO', 'IPO', 'USD', 'DTE']);
+
   // Local candidate extraction (cheap, fast, heuristic)
   function extractTickerCandidatesLocal(pageContent) {
     const candidates = new Set();
@@ -543,8 +546,8 @@
     const capsPattern = /\b([A-Z]{1,5})\b/g;
     while ((match = capsPattern.exec(textSource)) !== null) {
       const token = match[1];
-      // Filter out stopwords
-      if (!STOPWORDS_SET.has(token)) {
+      // Filter out stopwords and tokens that require $ prefix (YOLO, IPO, USD, DTE)
+      if (!STOPWORDS_SET.has(token) && !REQUIRE_DOLLAR_PREFIX.has(token)) {
         // For 1-2 letter tokens, only add if they appear multiple times or have context
         if (token.length >= 3) {
           candidates.add(token);
@@ -885,6 +888,34 @@
     }
   }
 
+  // Detect if this tab is the Ragard web app (so we can sync auth token to extension)
+  function isRagardWebAppOrigin() {
+    try {
+      const u = new URL(window.location.href);
+      const host = u.hostname.toLowerCase();
+      const port = u.port || (u.protocol === 'https:' ? '443' : '80');
+      if (host === 'ragardai.com' || host === 'www.ragardai.com') return true;
+      if ((host === 'localhost' || host === '127.0.0.1') && (port === '3000' || port === '3001')) return true;
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // When user is on Ragard website, push their session token to the extension so the sidebar
+  // stays logged in with the same account (no separate sign-in needed).
+  function syncTokenToExtension() {
+    if (!isRagardWebAppOrigin()) return;
+    try {
+      const token = localStorage.getItem('ragardToken');
+      if (token && token.length > 0) {
+        chrome.runtime.sendMessage({ type: 'RAGARD_SYNC_TOKEN', token: token }).catch(() => {});
+      }
+    } catch (e) {
+      // Ignore (e.g. in some frames or restricted contexts)
+    }
+  }
+
   // Initialize content script
   function init() {
     console.log('[Ragard] Content script loaded');
@@ -893,6 +924,17 @@
     const domain = new URL(window.location.href).hostname;
     if (preferences.disabledDomains.includes(domain)) {
       return; // Don't run on disabled domains
+    }
+
+    // If we're on the Ragard web app, sync auth token to extension so sidebar uses same account
+    if (isRagardWebAppOrigin()) {
+      syncTokenToExtension();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') syncTokenToExtension();
+      });
+      // Catch login that happens after load (e.g. redirect back from OAuth)
+      setTimeout(syncTokenToExtension, 2000);
+      setTimeout(syncTokenToExtension, 5000);
     }
     
     // Listen for messages from side panel

@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS public.watchlist_items (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     watchlist_id uuid NOT NULL REFERENCES public.watchlists(id) ON DELETE CASCADE,
     ticker text NOT NULL,
-    created_at timestamptz DEFAULT now()
+    created_at timestamptz DEFAULT now(),
+    -- Prevent duplicate tickers in the same watchlist
+    UNIQUE(watchlist_id, ticker)
 );
 
 -- ============================================================================
@@ -185,6 +187,22 @@ CREATE POLICY "Users can delete their own saved analyses"
 
 CREATE INDEX IF NOT EXISTS idx_watchlists_user_id ON public.watchlists(user_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist_id ON public.watchlist_items(watchlist_id);
+CREATE INDEX IF NOT EXISTS idx_watchlist_items_ticker ON public.watchlist_items(ticker);
 CREATE INDEX IF NOT EXISTS idx_saved_analyses_user_id ON public.saved_analyses(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_analyses_ticker ON public.saved_analyses(ticker);
 
+-- ============================================================================
+-- MIGRATION: For existing databases, add UNIQUE constraint
+-- ============================================================================
+-- If you already have watchlist_items table, run this to add the constraint:
+-- 
+-- ALTER TABLE public.watchlist_items 
+-- ADD CONSTRAINT watchlist_items_watchlist_id_ticker_key 
+-- UNIQUE (watchlist_id, ticker);
+--
+-- Note: This will fail if you have duplicate entries. Clean them up first:
+-- DELETE FROM public.watchlist_items a
+-- USING public.watchlist_items b
+-- WHERE a.id < b.id 
+-- AND a.watchlist_id = b.watchlist_id 
+-- AND a.ticker = b.ticker;

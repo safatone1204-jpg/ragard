@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Ragard – Reddit Analyzer",
-  "version": "0.1.1",
-  "description": "Analyze Reddit posts with Ragard AI.",
+  "name": "Ragard Sidebar Extension",
+  "version": "0.1.2",
+  "description": "Analyze posts and financial articles in real-time while you scroll. AI-powered sentiment analysis and stock ticker detection.",
+  "homepage_url": "https://ragardai.com",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

@@ -27,6 +27,9 @@ STOPWORDS = {
 # Ticker pattern: 1-5 uppercase letters
 TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
 
+# Tickers that require '$' prefix to be recognized (common financial acronyms)
+REQUIRE_DOLLAR_PREFIX = {"YOLO", "IPO", "USD", "DTE"}
+
 
 def is_valid_ticker_token(raw: str) -> Optional[str]:
     """
@@ -62,6 +65,12 @@ def is_valid_ticker_token(raw: str) -> Optional[str]:
     if token not in TICKER_SET:
         if DEBUG_TICKER_PARSER:
             logger.debug(f"Rejected '{raw}' -> '{token}': not in TICKER_SET")
+        return None
+    
+    # Special handling: YOLO, IPO, USD, DTE require '$' prefix
+    if token in REQUIRE_DOLLAR_PREFIX and not has_dollar:
+        if DEBUG_TICKER_PARSER:
+            logger.debug(f"Rejected '{raw}' -> '{token}': requires $ prefix")
         return None
     
     # If len >= 3: accept (already validated it's in TICKER_SET)

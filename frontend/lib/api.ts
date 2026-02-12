@@ -58,6 +58,8 @@ export interface Ticker {
   market_cap: number | null
   ragard_score: number | null  // Can be null if data is missing
   risk_level: string
+  regard_data_completeness?: string | null  // "full" | "partial" | "unknown"
+  regard_missing_factors?: string[] | null  // List of missing data fields
 }
 
 export interface TickerMetrics extends Ticker {
@@ -204,6 +206,11 @@ export interface StockAIOverview {
   summary_bullets: string[]
   risk_label?: 'low' | 'medium' | 'high'
   timeframe_hint?: string | null
+  regard_score_explanation?: string | null
+  recent_catalysts?: string | null
+  market_context?: string | null
+  financial_snapshot?: string | null
+  trading_context?: string | null
 }
 
 export interface CompanyProfile {
@@ -228,6 +235,49 @@ export interface CompanyProfile {
   ai_overview?: StockAIOverview | null
   regard_data_completeness?: string | null  // "full" | "partial" | "unknown"
   regard_missing_factors?: string[] | null  // List of missing data fields
+}
+
+export interface BasicStockInfo {
+  symbol: string
+  company_name: string | null
+  price: number | null
+  change_pct: number | null
+}
+
+/**
+ * Fetch basic stock information quickly (price, name, change).
+ * This is a lightweight endpoint that returns fast without calculating regard scores.
+ */
+export async function fetchStockBasicInfo(
+  symbol: string,
+  signal?: AbortSignal
+): Promise<BasicStockInfo> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/stocks/${symbol.toUpperCase()}/basic`, {
+      cache: 'no-store',
+      signal: signal,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Stock not found for ${symbol}`)
+      }
+      throw new Error(`Failed to fetch basic stock info: ${response.status} ${response.statusText}`)
+    }
+
+    return response.json()
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(`Cannot connect to backend at ${API_BASE_URL}. Is the server running?`)
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your backend server.')
+    }
+    throw error
+  }
 }
 
 export async function fetchStockProfile(

@@ -8,7 +8,7 @@ Fetches company data from multiple sources:
 - Ragard scoring
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 import yfinance as yf
 import requests
@@ -69,6 +69,11 @@ class StockAIOverview(BaseModel):
     summary_bullets: list[str]
     risk_label: str  # "low" | "medium" | "high"
     timeframe_hint: str | None = None  # e.g. "day trade", "swing trade", "longer-term"
+    regard_score_explanation: str | None = None  # How the Regard Score was calculated
+    recent_catalysts: str | None = None  # Recent news, filings, price movements, narratives
+    market_context: str | None = None  # Market cap context, trading characteristics
+    financial_snapshot: str | None = None  # Financial health overview
+    trading_context: str | None = None  # What type of trader this appeals to, risk factors
 
 
 class CompanyProfile(BaseModel):
@@ -473,23 +478,6 @@ async def get_company_profile(symbol: str) -> CompanyProfile:
     try:
         from app.services.ai_client import generate_stock_overview_ai
         
-        # Get recent Reddit post samples for this ticker
-        reddit_samples = []
-        try:
-            from app.social.reddit import get_recent_reddit_posts, REDDIT_SUBREDDITS
-            posts = await get_recent_reddit_posts(REDDIT_SUBREDDITS, "24h")
-            for post in posts[:20]:  # Get up to 20 recent posts
-                text = post.title
-                if post.selftext:
-                    text += " " + post.selftext[:200]  # Limit selftext length
-                # Check if symbol is mentioned
-                if symbol.upper() in text.upper():
-                    reddit_samples.append(post.title[:100])  # Limit title length
-                    if len(reddit_samples) >= 10:  # Max 10 samples
-                        break
-        except Exception as e:
-            logger.debug(f"Error fetching Reddit samples for AI: {e}")
-        
         # Get percent changes for different timeframes
         percent_changes = {}
         try:
@@ -504,19 +492,35 @@ async def get_company_profile(symbol: str) -> CompanyProfile:
             if profile.change_pct is not None:
                 percent_changes["1d"] = float(profile.change_pct)
         
-        # Build payload for AI
+        # Prepare recent filings summary (last 3 months)
+        recent_filings_summary = []
+        if profile.filings:
+            three_months_ago = datetime.now() - timedelta(days=90)
+            for filing in profile.filings[:5]:  # Limit to 5 most recent
+                if filing.filed_at and filing.filed_at >= three_months_ago:
+                    recent_filings_summary.append({
+                        "form_type": filing.form_type,
+                        "filed_date": filing.filed_at.isoformat() if hasattr(filing.filed_at, 'isoformat') else str(filing.filed_at),
+                        "description": filing.description or ""
+                    })
+        
+        # Build payload for AI (excluding Reddit data - that stays in Reddit Activity section)
         ai_payload = {
             "symbol": symbol,
             "company_name": profile.company_name,
             "sector": profile.sector,
             "industry": profile.industry,
+            "description": profile.description,  # Company business description
             "price": profile.price,
+            "change_pct": profile.change_pct,
             "percent_changes": percent_changes,
             "market_cap": profile.valuation.market_cap if profile.valuation else None,
+            "valuation": profile.valuation.model_dump() if profile.valuation else None,
+            "financials": profile.financials.model_dump() if profile.financials else None,
             "regard_score": profile.ragard_score,
             "regard_breakdown": profile.ragard_breakdown.model_dump() if profile.ragard_breakdown else None,
             "narratives": profile.narratives,
-            "reddit_samples": reddit_samples,
+            "recent_filings": recent_filings_summary,
         }
         
         # Call AI (with timeout protection - don't block too long)
@@ -528,6 +532,11 @@ async def get_company_profile(symbol: str) -> CompanyProfile:
                 summary_bullets=ai_result["summary_bullets"],
                 risk_label=ai_result["risk_label"],
                 timeframe_hint=ai_result.get("timeframe_hint"),
+                regard_score_explanation=ai_result.get("regard_score_explanation"),
+                recent_catalysts=ai_result.get("recent_catalysts"),
+                market_context=ai_result.get("market_context"),
+                financial_snapshot=ai_result.get("financial_snapshot"),
+                trading_context=ai_result.get("trading_context"),
             )
         else:
             profile.ai_overview = None

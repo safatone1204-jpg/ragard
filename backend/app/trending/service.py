@@ -224,13 +224,17 @@ async def build_trending_tickers(
             # It represents structural degen level of the company, not trending activity
             # Use shorter timeout for trending to prevent overall request timeout
             # Cache will help avoid recalculation for recently computed scores
+            regard_data_completeness = None
+            regard_missing_factors = None
             try:
                 regard_info = await asyncio.wait_for(
                     get_regard_score_for_symbol(symbol),
                     timeout=5.0  # Reduced to 5 seconds for trending (cache helps avoid slow calls)
                 )
                 ragard_score = regard_info.get("regard_score")
-                logger.debug(f"Regard Score for {symbol}: {ragard_score} (completeness={regard_info.get('data_completeness')})")
+                regard_data_completeness = regard_info.get("data_completeness")
+                regard_missing_factors = regard_info.get("missing_factors", [])
+                logger.debug(f"Regard Score for {symbol}: {ragard_score} (completeness={regard_data_completeness})")
             except asyncio.TimeoutError:
                 logger.debug(f"Regard Score calculation timed out for {symbol} (skipping for trending)")
                 ragard_score = None
@@ -264,6 +268,8 @@ async def build_trending_tickers(
                 market_cap=Decimal(str(int(market_cap))) if market_cap > 0 else None,
                 ragard_score=ragard_score,  # Can be None now
                 risk_level=risk_level,
+                regard_data_completeness=regard_data_completeness,
+                regard_missing_factors=regard_missing_factors,
             )
             return ticker_obj
             

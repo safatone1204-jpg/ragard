@@ -6,6 +6,7 @@ import { fetchTrending } from '@/lib/api'
 import RiskBadges from './RiskBadges'
 import RagardScoreGauge from './RagardScoreGauge'
 import RagardScoreBadge from './RagardScoreBadge'
+import RegardScoreWarning from './RegardScoreWarning'
 import Card from './Card'
 import RadarLoader from './RadarLoader'
 import { TimeframeKey } from '@/types/narratives'
@@ -97,8 +98,10 @@ function RegardScoreTooltip() {
               left: `${position.left}px`,
             }}
           >
-            <div className="bg-ragard-surfaceAlt border border-slate-800 rounded-md p-2.5 shadow-xl text-[11px] leading-relaxed text-ragard-textPrimary whitespace-normal min-w-[200px] max-w-[250px]">
-              Regard Score is a 0-100 degen meter for investing in this company right now. 0 = solid, boring, low-risk; 100 = full casino, hyper-speculative. Higher = more degen / more risk. Timeframe changes which stocks appear, not the score itself.
+            <div className="bg-ragard-surfaceAlt border border-slate-800 rounded-lg p-3 shadow-xl text-xs leading-relaxed text-ragard-textPrimary whitespace-normal min-w-[240px] max-w-[280px]">
+              <p className="text-ragard-textSecondary">
+                Regard Score is a 0-100 degen meter for investing in this company right now. 0 = solid, boring, low-risk; 100 = full casino, hyper-speculative. Higher = more degen / more risk. Timeframe changes which stocks appear, not the score itself.
+              </p>
             </div>
           </div>
         )}
@@ -112,14 +115,18 @@ export default function TrendingTable() {
   const [tickers, setTickers] = useState<Ticker[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
 
   // Load from cache or fetch when timeframe changes
   useEffect(() => {
+    // Reset showAll when timeframe changes
+    setShowAll(false)
+    
     const cacheKey = getCacheKey(selectedTimeframe)
     const cached = sessionStorage.getItem(cacheKey)
     
     if (cached) {
-      // Use cached data if available for this specific timeframe
+      // Use cached data if available
       try {
         const cachedData = JSON.parse(cached)
         setTickers(cachedData)
@@ -150,7 +157,7 @@ export default function TrendingTable() {
         clearTimeout(timeoutId)
         setTickers(data)
         
-        // Cache the data for this timeframe
+        // Cache the data for this timeframe (cache all 20)
         const cacheKey = getCacheKey(selectedTimeframe)
         sessionStorage.setItem(cacheKey, JSON.stringify(data))
       } catch (fetchErr: any) {
@@ -410,7 +417,7 @@ export default function TrendingTable() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {tickers.map((ticker) => {
+                {(showAll ? tickers : tickers.slice(0, 10)).map((ticker) => {
                   const handleRowClick = () => {
                     // Cache ticker data for detail page consistency
                     sessionStorage.setItem(`ticker_${ticker.symbol}`, JSON.stringify(ticker))
@@ -458,8 +465,14 @@ export default function TrendingTable() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ticker.ragard_score !== null && ticker.ragard_score !== undefined ? (
-                          <div className="w-12 h-12 mx-auto">
-                            <RagardScoreGauge score={ticker.ragard_score} size="sm" />
+                          <div className="flex items-center justify-center gap-1.5">
+                            <div className="w-12 h-12">
+                              <RagardScoreGauge score={ticker.ragard_score} size="sm" />
+                            </div>
+                            <RegardScoreWarning 
+                              dataCompleteness={ticker.regard_data_completeness}
+                              missingFactors={ticker.regard_missing_factors}
+                            />
                           </div>
                         ) : (
                           <span className="text-ragard-textSecondary text-sm">N/A</span>
@@ -472,6 +485,30 @@ export default function TrendingTable() {
             </table>
             </div>
           </Card>
+          
+          {/* Show All Button */}
+          {!showAll && tickers.length > 10 && !loading && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={() => setShowAll(true)}
+                className="px-4 py-2 rounded-lg bg-ragard-surface border border-slate-800 text-ragard-textSecondary hover:bg-ragard-surfaceAlt hover:text-ragard-textPrimary hover:border-ragard-accent/30 transition-colors text-sm font-medium"
+              >
+                Show All Analyzed Tickers ({tickers.length})
+              </button>
+            </div>
+          )}
+          
+          {/* Show Less Button */}
+          {showAll && tickers.length > 10 && !loading && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={() => setShowAll(false)}
+                className="px-4 py-2 rounded-lg bg-ragard-surface border border-slate-800 text-ragard-textSecondary hover:bg-ragard-surfaceAlt hover:text-ragard-textPrimary hover:border-ragard-accent/30 transition-colors text-sm font-medium"
+              >
+                Show Top 10 Only
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

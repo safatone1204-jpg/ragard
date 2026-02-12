@@ -257,6 +257,14 @@ async def _compute_data_driven_base_score(symbol: str) -> tuple[float | None, li
                 if full_info:
                     info.update(full_info)
                 
+                # Also try to get historical data for fallback calculations
+                try:
+                    hist = t.history(period="1y", interval="1d")
+                    if not hist.empty:
+                        info['_hist_data'] = hist
+                except:
+                    pass
+                
                 return info
             except Exception as e:
                 logger.warning(f"Error fetching info for {sym}: {e}")
@@ -287,6 +295,28 @@ async def _compute_data_driven_base_score(symbol: str) -> tuple[float | None, li
             # Try alternative market cap fields
             market_cap_raw = info.get("totalAssets") or info.get("enterpriseValue")
         
+        # Calculate market cap from shares outstanding * price if still missing
+        if (market_cap_raw is None or market_cap_raw == 0) and "_hist_data" in info:
+            try:
+                hist = info["_hist_data"]
+                if not hist.empty:
+                    current_price = float(hist["Close"].iloc[-1])
+                    shares_outstanding = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+                    if shares_outstanding and current_price:
+                        market_cap_raw = float(shares_outstanding) * current_price
+            except:
+                pass
+        
+        # Try calculating from shares outstanding and current price
+        if (market_cap_raw is None or market_cap_raw == 0):
+            shares_outstanding = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+            current_price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("lastPrice")
+            if shares_outstanding and current_price:
+                try:
+                    market_cap_raw = float(shares_outstanding) * float(current_price)
+                except:
+                    pass
+        
         if market_cap_raw is None or market_cap_raw == 0:
             missing_factors.append("market_cap")
         else:
@@ -305,20 +335,74 @@ async def _compute_data_driven_base_score(symbol: str) -> tuple[float | None, li
         forward_pe = info.get("forwardPE")
         profit_margins_raw = info.get("profitMargins")
         
-        if profit_margins_raw is None and trailing_pe is None and forward_pe is None:
+        # Try to calculate profit margins from revenue and net income if missing
+        if profit_margins_raw is None:
+            total_revenue = info.get("totalRevenue")
+            net_income = info.get("netIncomeToCommon") or info.get("netIncome")
+            if total_revenue and net_income and total_revenue != 0:
+                try:
+                    profit_margins_raw = float(net_income) / float(total_revenue)
+                except:
+                    pass
+        
+        # Try operating margins as fallback
+        if profit_margins_raw is None:
+            profit_margins_raw = info.get("operatingMargins")
+        
+        # Use earnings growth as indicator if margins still missing
+        earnings_growth = None
+        if profit_margins_raw is None:
+            earnings_growth = info.get("earningsGrowth") or info.get("earningsQuarterlyGrowth")
+        
+        if profit_margins_raw is None and trailing_pe is None and forward_pe is None and earnings_growth is None:
             missing_factors.append("profit_margins")
         else:
             profit_margins = float(profit_margins_raw) if profit_margins_raw is not None else 0.0
-            if profit_margins < 0:
+            # If we have negative PE, that's a strong signal of unprofitability
+            if trailing_pe is not None and trailing_pe < 0:
+                degen_points += 20
+            elif profit_margins < 0:
                 # Negative margins = unprofitable
                 degen_points += 20
             elif profit_margins > 0 and profit_margins < 0.05:
                 # Very low margins
                 degen_points += 10
+            elif earnings_growth is not None and earnings_growth < -0.2:
+                # Significant negative earnings growth
+                degen_points += 15
             # Positive margins > 5% = 0 points (profitable)
         
         # Factor 3: Volatility/Beta (higher = more degen)
         beta_raw = info.get("beta")
+        
+        # Try alternative beta fields
+        if beta_raw is None:
+            beta_raw = info.get("beta3Year") or info.get("beta5Year")
+        
+        # Calculate beta from historical data if still missing
+        if beta_raw is None and "_hist_data" in info:
+            try:
+                hist = info["_hist_data"]
+                if not hist.empty and len(hist) > 20:  # Need enough data points
+                    # Calculate returns
+                    ticker_returns = hist["Close"].pct_change().dropna()
+                    
+                    # Try to get SPY data for comparison (simplified - use variance as proxy)
+                    # For now, use standard deviation of returns as volatility proxy
+                    if len(ticker_returns) > 0:
+                        volatility = ticker_returns.std()
+                        # High volatility (>5% daily std) suggests high beta
+                        if volatility > 0.05:
+                            beta_raw = 2.0  # High volatility proxy
+                        elif volatility > 0.03:
+                            beta_raw = 1.5  # Medium-high volatility
+                        elif volatility > 0.02:
+                            beta_raw = 1.2  # Medium volatility
+                        else:
+                            beta_raw = 0.8  # Low volatility
+            except Exception as e:
+                logger.debug(f"Error calculating beta from historical data for {symbol}: {e}")
+        
         if beta_raw is None:
             missing_factors.append("beta")
         else:
@@ -333,6 +417,20 @@ async def _compute_data_driven_base_score(symbol: str) -> tuple[float | None, li
         
         # Factor 4: Liquidity (illiquid = more degen)
         avg_volume_raw = info.get("averageVolume")
+        
+        # Try alternative volume fields
+        if avg_volume_raw is None or avg_volume_raw == 0:
+            avg_volume_raw = info.get("volume") or info.get("regularMarketVolume") or info.get("averageVolume10days")
+        
+        # Calculate average volume from historical data if still missing
+        if (avg_volume_raw is None or avg_volume_raw == 0) and "_hist_data" in info:
+            try:
+                hist = info["_hist_data"]
+                if not hist.empty and "Volume" in hist.columns:
+                    avg_volume_raw = float(hist["Volume"].mean())
+            except:
+                pass
+        
         if avg_volume_raw is None or avg_volume_raw == 0:
             missing_factors.append("avg_volume")
         else:
@@ -347,10 +445,42 @@ async def _compute_data_driven_base_score(symbol: str) -> tuple[float | None, li
         
         # Factor 5: Short Interest (high short interest = more degen/meme potential)
         short_ratio_raw = info.get("shortRatio")
+        
+        # Try alternative short interest fields
+        if short_ratio_raw is None:
+            short_ratio_raw = info.get("shortPercentOfFloat") or info.get("shortPercentOfSharesOutstanding")
+        
+        # Calculate short ratio from shares short and shares outstanding if available
+        if short_ratio_raw is None:
+            shares_short = info.get("sharesShort") or info.get("sharesShortPriorMonth")
+            shares_outstanding = info.get("sharesOutstanding") or info.get("floatShares")
+            if shares_short and shares_outstanding and shares_outstanding > 0:
+                try:
+                    short_ratio_raw = float(shares_short) / float(shares_outstanding)
+                except:
+                    pass
+        
+        # Try short ratio as percentage (convert to ratio)
+        if short_ratio_raw is None:
+            short_percent = info.get("shortPercentOfFloat")
+            if short_percent is not None:
+                try:
+                    # If it's a percentage (0-100), convert to ratio
+                    if short_percent > 1:
+                        short_ratio_raw = short_percent / 100.0
+                    else:
+                        short_ratio_raw = short_percent
+                except:
+                    pass
+        
         if short_ratio_raw is None:
             missing_factors.append("short_ratio")
         else:
             short_ratio = float(short_ratio_raw)
+            # Normalize: if it's a percentage (0-100), convert to ratio
+            if short_ratio > 1 and short_ratio <= 100:
+                short_ratio = short_ratio / 100.0
+            
             if short_ratio > 10:
                 degen_points += 15
             elif short_ratio > 5:

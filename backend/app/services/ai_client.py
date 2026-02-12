@@ -65,11 +65,14 @@ async def generate_stock_overview_ai(payload: Dict[str, Any]) -> Optional[Dict[s
     Generate AI overview for a stock ticker.
     
     Args:
-        payload: Dict containing ticker data (symbol, company_name, sector, price, 
-                 percent_changes, market_cap, regard_score, regard_breakdown, narratives, reddit_samples)
+        payload: Dict containing ticker data (symbol, company_name, sector, industry, description,
+                 price, change_pct, percent_changes, market_cap, valuation, financials,
+                 regard_score, regard_breakdown, narratives, recent_filings)
     
     Returns:
-        Dict with fields: headline, summary_bullets, risk_label, timeframe_hint
+        Dict with fields: headline, summary_bullets, risk_label, timeframe_hint,
+        company_overview, regard_score_explanation, recent_catalysts, market_context,
+        financial_snapshot, trading_context
         Returns None if AI call fails or API key not set
     """
     client = _get_openai_client()
@@ -89,8 +92,9 @@ async def generate_stock_overview_ai(payload: Dict[str, Any]) -> Optional[Dict[s
         # Build prompt
         system_message = (
             "You are an assistant for a trading tool called Ragard. "
-            "You explain why a ticker is 'degen' or not, using simple language for retail traders. "
-            "Regard Score is a 0–100 degen meter (higher = more casino). "
+            "You provide comprehensive stock analysis using simple language for retail traders. "
+            "Regard Score is a 0–100 degen meter (higher = more casino/speculative). "
+            "Do NOT mention Reddit activity or social media mentions - that information is displayed separately. "
             "Don't give financial advice; just describe what's going on."
         )
         
@@ -98,14 +102,41 @@ async def generate_stock_overview_ai(payload: Dict[str, Any]) -> Optional[Dict[s
         payload_str = json.dumps(payload, indent=2)
         
         user_message = (
-            f"Using ONLY the data below, write a short JSON object summarizing this ticker.\n\n"
+            f"Using ONLY the data below, write a comprehensive JSON object summarizing this ticker.\n\n"
             f"Data:\n{payload_str}\n\n"
-            f"Fields required:\n"
-            f"- headline: 1 sentence summarizing what's going on.\n"
+            f"Required JSON fields:\n"
+            f"- headline: 1 sentence summarizing what's going on with this stock. (This field is required but won't be displayed)\n"
             f"- summary_bullets: 3–5 short bullets. Focus on *why* it's hot or boring "
-            f"(Regard Score, narratives, recent move, Reddit chatter).\n"
-            f"- risk_label: 'low', 'medium', or 'high' based on volatility and Regard Score.\n"
-            f"- timeframe_hint: 'day trade', 'swing trade', or 'longer-term' based on the patterns you see.\n\n"
+            f"(Regard Score, narratives, recent moves, market context). DO NOT mention Reddit activity. (This field is required but won't be displayed)\n"
+            f"- risk_label: 'low', 'medium', or 'high' based on the Regard Score and actual risk factors. "
+            f"Be accurate: Regard Score 0-30 = low risk, 30-60 = medium risk, 60-100 = high risk. "
+            f"Also consider financial health, volatility (beta), and market cap. "
+            f"This must align with the Regard Score - a score of 75 should NOT be 'low risk'.\n"
+            f"- timeframe_hint: Specific trading timeframe recommendation based on Regard Score and volatility patterns. "
+            f"Options: 'Day trade' (high volatility, score 60+), 'Swing trade' (moderate volatility, score 40-70), "
+            f"'Position trade' (lower volatility, score 0-40), or 'Avoid trading' (extreme risk, score 80+). "
+            f"Make it specific and accurate based on the actual data.\n"
+            f"- regard_score_explanation: 4-6 sentences explaining EXACTLY HOW the Regard Score was calculated. "
+            f"This is CRITICAL. You MUST use the actual numerical values from regard_breakdown if available. "
+            f"Break down each component contribution (hype, volatility, liquidity, risk) with specific numbers. "
+            f"Explain what Ragard was thinking when calculating this score. For example: "
+            f"'The Regard Score of X is composed of Y points from hype (social buzz), Z points from volatility "
+            f"(price swings), W points from liquidity (market cap/volume), and adjusted by -V points for risk factors. "
+            f"The high volatility component reflects [company-specific reason like recent price surge or beta]. "
+            f"The liquidity score indicates [company-specific reason like microcap status or low volume]. "
+            f"Risk adjustments account for [company-specific factors like financial instability or high debt].' "
+            f"DO NOT say 'suggests' or 'indicates' - state the actual calculation. DO NOT say 'specific scores weren't provided' "
+            f"- if breakdown data is missing, explain what factors likely contributed based on the company's actual metrics "
+            f"(market cap, price changes, financials, etc.). Make it company-specific and contextual.\n"
+            f"- recent_catalysts: 2-3 sentences about recent catalysts: SEC filings (from recent_filings), "
+            f"price movements (from percent_changes), and narratives the ticker is part of. "
+            f"DO NOT mention Reddit mentions or social media activity.\n"
+            f"- market_context: 2-3 sentences about market cap context (microcap vs large cap), "
+            f"trading characteristics (volume, liquidity), and how it compares to sector/industry.\n"
+            f"- financial_snapshot: 2-3 sentences summarizing financial health: profitability, margins, "
+            f"debt levels, revenue growth. Highlight key strengths or red flags.\n"
+            f"- trading_context: 2-3 sentences about what type of trader this appeals to, "
+            f"key risk factors to watch, and what makes it attractive or risky.\n\n"
             f"Respond with valid JSON only, no extra text."
         )
         
@@ -117,7 +148,7 @@ async def generate_stock_overview_ai(payload: Dict[str, Any]) -> Optional[Dict[s
                 {"role": "user", "content": user_message}
             ],
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=1500,  # Increased for comprehensive overview sections
             response_format={"type": "json_object"}
         )
         
@@ -134,6 +165,15 @@ async def generate_stock_overview_ai(payload: Dict[str, Any]) -> Optional[Dict[s
         if not all(field in result for field in required_fields):
             logger.warning(f"Missing required fields in AI response for {symbol}")
             return None
+        
+        # Ensure optional fields are set to None if missing
+        optional_fields = [
+            "timeframe_hint", "regard_score_explanation",
+            "recent_catalysts", "market_context", "financial_snapshot", "trading_context"
+        ]
+        for field in optional_fields:
+            if field not in result:
+                result[field] = None
         
         # Ensure risk_label is valid
         if result["risk_label"] not in ["low", "medium", "high"]:
