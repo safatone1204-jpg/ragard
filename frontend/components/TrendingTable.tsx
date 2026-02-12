@@ -25,6 +25,8 @@ interface Ticker {
   market_cap: number | null
   ragard_score: number | null  // Can be null if data is missing
   risk_level: string
+  regard_data_completeness?: string | null
+  regard_missing_factors?: string[] | null
 }
 
 // Cache key for sessionStorage
